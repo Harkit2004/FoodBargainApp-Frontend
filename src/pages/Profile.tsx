@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Button } from '@/components/ui/button';
 import { MobileLayout } from '@/components/MobileLayout';
 import { BottomNavigation } from '@/components/BottomNavigation';
@@ -13,44 +13,38 @@ import {
   LogOut,
   Edit,
   Star,
-  Utensils
+  Utensils,
+  Store
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
-
-interface UserProfile {
-  name: string;
-  email: string;
-  phone: string;
-  location: string;
-  memberSince: string;
-  totalSavings: number;
-  favoriteCuisines: string[];
-  dietaryPreferences: string[];
-}
-
-const mockProfile: UserProfile = {
-  name: "John Doe",
-  email: "john.doe@example.com",
-  phone: "+1 (555) 123-4567",
-  location: "Toronto, ON",
-  memberSince: "January 2024",
-  totalSavings: 347.50,
-  favoriteCuisines: ["Italian", "Japanese", "Mexican"],
-  dietaryPreferences: ["Vegetarian"]
-};
+import { useAuth } from '@/contexts/AuthContext';
+import { useAuth as useClerkAuth } from '@clerk/clerk-react';
 
 export const Profile: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [profile] = useState<UserProfile>(mockProfile);
+  const { user, logout, checkBackendAuth } = useAuth();
+  const { getToken } = useClerkAuth();
 
-  const handleLogout = () => {
-    toast({
-      title: "Logged Out",
-      description: "You have been successfully logged out.",
-    });
-    navigate('/welcome');
+  const handleLogout = async () => {
+    try {
+      await logout();
+      toast({
+        title: "Logged Out",
+        description: "You have been successfully logged out.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to log out. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleBecomePartner = () => {
+    navigate('/partner/register');
   };
 
   const ProfileStat: React.FC<{ 
@@ -102,13 +96,14 @@ export const Profile: React.FC = () => {
   );
 
   return (
-    <>
-      <MobileLayout
-        showHeader={true}
-        headerTitle="Profile"
-        showBackButton={false}
-      >
-        <div className="px-mobile py-4 pb-20">
+    <div className="min-h-screen bg-background flex justify-center">
+      <div className="w-full max-w-md mx-auto">
+        <MobileLayout
+          showHeader={true}
+          headerTitle="Profile"
+          showBackButton={false}
+        >
+          <div className="px-6 py-4 pb-20">
           {/* Profile Header */}
           <div className="bg-gradient-primary text-primary-foreground rounded-2xl p-6 mb-6 shadow-custom-lg">
             <div className="flex items-center gap-4 mb-4">
@@ -116,11 +111,11 @@ export const Profile: React.FC = () => {
                 <User className="w-10 h-10" />
               </div>
               <div className="flex-1">
-                <h2 className="text-xl font-bold">{profile.name}</h2>
-                <p className="text-primary-foreground/90">{profile.email}</p>
+                <h2 className="text-xl font-bold">{user?.displayName || 'User'}</h2>
+                <p className="text-primary-foreground/90">{user?.email}</p>
                 <div className="flex items-center gap-1 mt-1">
                   <MapPin className="w-4 h-4" />
-                  <span className="text-sm">{profile.location}</span>
+                  <span className="text-sm">{user?.location || 'Location not set'}</span>
                 </div>
               </div>
               <Button
@@ -134,10 +129,10 @@ export const Profile: React.FC = () => {
             </div>
             
             <div className="text-center">
-              <p className="text-2xl font-bold">${profile.totalSavings.toFixed(2)}</p>
-              <p className="text-primary-foreground/90">Total Savings</p>
+              <p className="text-2xl font-bold">Welcome!</p>
+              <p className="text-primary-foreground/90">Food Lover</p>
               <p className="text-sm text-primary-foreground/75 mt-1">
-                Member since {profile.memberSince}
+                Start exploring amazing deals
               </p>
             </div>
           </div>
@@ -146,18 +141,18 @@ export const Profile: React.FC = () => {
           <div className="grid grid-cols-3 gap-3 mb-6">
             <ProfileStat
               label="Deals Used"
-              value="23"
+              value="0"
               icon={<Star className="w-6 h-6 text-primary" />}
             />
             <ProfileStat
               label="Favorites"
-              value="12"
+              value="0"
               icon={<Heart className="w-6 h-6 text-success" />}
               color="success"
             />
             <ProfileStat
               label="Reviews"
-              value="8"
+              value="0"
               icon={<Utensils className="w-6 h-6 text-accent" />}
               color="accent"
             />
@@ -169,15 +164,15 @@ export const Profile: React.FC = () => {
             <div className="space-y-2">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Phone:</span>
-                <span className="font-medium">{profile.phone}</span>
+                <span className="font-medium">{user?.phone || 'Not provided'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Favorite Cuisines:</span>
-                <span className="font-medium">{profile.favoriteCuisines.join(", ")}</span>
+                <span className="text-muted-foreground">Account ID:</span>
+                <span className="font-medium text-xs">{user?.id?.slice(0, 8) || 'N/A'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Dietary:</span>
-                <span className="font-medium">{profile.dietaryPreferences.join(", ")}</span>
+                <span className="text-muted-foreground">Status:</span>
+                <span className="font-medium text-green-500">Active</span>
               </div>
             </div>
           </div>
@@ -229,6 +224,15 @@ export const Profile: React.FC = () => {
               }}
             />
 
+            {!user?.isPartner && (
+              <MenuOption
+                icon={<Store className="w-5 h-5" />}
+                label="Become a Partner"
+                description="Register your restaurant and start offering deals"
+                onClick={handleBecomePartner}
+              />
+            )}
+
             <MenuOption
               icon={<LogOut className="w-5 h-5" />}
               label="Sign Out"
@@ -238,18 +242,19 @@ export const Profile: React.FC = () => {
             />
           </div>
 
-          {/* App Info */}
-          <div className="mt-8 text-center">
-            <p className="text-xs text-muted-foreground">
-              FoodieDeals v1.0.0
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Made with ❤️ for food lovers
-            </p>
+            {/* App Info */}
+            <div className="mt-8 text-center">
+              <p className="text-xs text-muted-foreground">
+                FoodBargain v1.0.0
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Made with ❤️ for food lovers
+              </p>
+            </div>
           </div>
-        </div>
-      </MobileLayout>
-      <BottomNavigation />
-    </>
+        </MobileLayout>
+        <BottomNavigation />
+      </div>
+    </div>
   );
 };

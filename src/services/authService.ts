@@ -1,4 +1,16 @@
-import { apiService } from './api';
+import { apiService, ApiResponse } from './api';
+
+export interface User {
+  id: string;
+  clerkUserId: string;
+  email: string;
+  displayName: string;
+  isPartner?: boolean;
+  location?: string;
+  phone?: string;
+  cuisinePreferences?: number[];
+  dietaryPreferences?: number[];
+}
 
 export interface RegisterData {
   clerkUserId: string;
@@ -18,44 +30,51 @@ export interface PartnerRegisterData {
   phone?: string;
 }
 
-export interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  error?: string;
-  message?: string;
-  requiresRegistration?: boolean;
+export interface LoginResponse {
+  user: User;
+  token?: string;
+}
+
+export interface PartnerProfile {
+  id: string;
+  businessName: string;
+  streetAddress?: string;
+  city?: string;
+  province?: string;
+  postalCode?: string;
+  phone?: string;
 }
 
 class AuthService {
-  async register(data: RegisterData): Promise<ApiResponse<any>> {
+  async register(data: RegisterData): Promise<ApiResponse<LoginResponse>> {
     return apiService.post('/auth/register', data);
   }
 
-  async login(clerkUserId: string): Promise<ApiResponse<any>> {
+  async login(clerkUserId: string): Promise<ApiResponse<LoginResponse>> {
     return apiService.post('/auth/login', { clerkUserId });
   }
 
-  async forgotPassword(email: string): Promise<ApiResponse<any>> {
+  async forgotPassword(email: string): Promise<ApiResponse<{ message: string }>> {
     return apiService.post('/auth/forgot-password', { email });
   }
 
-  async resetPassword(clerkUserId: string): Promise<ApiResponse<any>> {
+  async resetPassword(clerkUserId: string): Promise<ApiResponse<{ message: string }>> {
     return apiService.post('/auth/reset-password', { clerkUserId });
   }
 
-  async logout(): Promise<ApiResponse<any>> {
+  async logout(): Promise<ApiResponse<{ message: string }>> {
     return apiService.post('/auth/logout');
   }
 
-  async registerAsPartner(data: PartnerRegisterData): Promise<ApiResponse<any>> {
+  async registerAsPartner(data: PartnerRegisterData): Promise<ApiResponse<PartnerProfile>> {
     return apiService.post('/partner/register', data);
   }
 
-  async getPartnerProfile(): Promise<ApiResponse<any>> {
+  async getPartnerProfile(): Promise<ApiResponse<PartnerProfile>> {
     return apiService.get('/partner/profile');
   }
 
-  async updatePartnerProfile(data: Partial<PartnerRegisterData>): Promise<ApiResponse<any>> {
+  async updatePartnerProfile(data: Partial<PartnerRegisterData>): Promise<ApiResponse<PartnerProfile>> {
     return apiService.put('/partner/profile', data);
   }
 }

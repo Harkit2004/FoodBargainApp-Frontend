@@ -1,60 +1,103 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
 import { MobileLayout } from '@/components/MobileLayout';
-import { useNavigate } from 'react-router-dom';
+import { LocationPicker } from '@/components/LocationPicker';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { SignUp, useUser } from '@clerk/clerk-react';
+import { preferencesService, CuisineType, DietaryPreference } from '@/services/preferencesService';
 
-interface CuisineType {
-  id: number;
-  name: string;
-  emoji: string;
-}
+// Emoji mapping for cuisines and dietary preferences
+const cuisineEmojis: Record<string, string> = {
+  'Italian': '🍝',
+  'Mexican': '🌮',
+  'Chinese': '🥡',
+  'Indian': '🍛',
+  'Japanese': '🍣',
+  'American': '🍔',
+  'Thai': '🍜',
+  'French': '🥐',
+  'Mediterranean': '🫒',
+  'Korean': '🍜',
+  'Vietnamese': '🍲',
+  'Greek': '🥙',
+};
 
-interface DietaryPreference {
-  id: number;
-  name: string;
-  emoji: string;
-}
-
-const cuisineTypes: CuisineType[] = [
-  { id: 1, name: 'Italian', emoji: '🍝' },
-  { id: 2, name: 'Mexican', emoji: '🌮' },
-  { id: 3, name: 'Chinese', emoji: '🥡' },
-  { id: 4, name: 'Indian', emoji: '🍛' },
-  { id: 5, name: 'Japanese', emoji: '🍣' },
-  { id: 6, name: 'American', emoji: '🍔' },
-  { id: 7, name: 'Thai', emoji: '🍜' },
-  { id: 8, name: 'French', emoji: '🥐' },
-];
-
-const dietaryPreferences: DietaryPreference[] = [
-  { id: 1, name: 'Vegetarian', emoji: '🥗' },
-  { id: 2, name: 'Vegan', emoji: '🌱' },
-  { id: 3, name: 'Gluten-Free', emoji: '🌾' },
-  { id: 4, name: 'Keto', emoji: '🥑' },
-  { id: 5, name: 'Halal', emoji: '☪️' },
-  { id: 6, name: 'Kosher', emoji: '✡️' },
-];
+const dietaryEmojis: Record<string, string> = {
+  'Vegetarian': '🥗',
+  'Vegan': '🌱',
+  'Gluten-Free': '🌾',
+  'Keto': '🥑',
+  'Halal': '☪️',
+  'Kosher': '✡️',
+  'Dairy-Free': '🥛',
+  'Nut-Free': '🥜',
+};
 
 export const Register: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
-  const [step, setStep] = useState(1);
+  const { completeRegistration } = useAuth();
+  const { isSignedIn, user: clerkUser, isLoaded } = useUser();
   const [loading, setLoading] = useState(false);
+  const [preferencesLoading, setPreferencesLoading] = useState(true);
   
+  // Check if we're coming from Clerk auth or need to complete registration
+  const clerkData = location.state;
+  const needsCompletion = (clerkData?.clerkUserId) || (isSignedIn && clerkUser);
+
   const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-    confirmPassword: '',
     displayName: '',
     phone: '',
     location: '',
     cuisinePreferences: [] as number[],
     dietaryPreferences: [] as number[],
   });
+
+  const [cuisineTypes, setCuisineTypes] = useState<CuisineType[]>([]);
+  const [dietaryPreferences, setDietaryPreferences] = useState<DietaryPreference[]>([]);
+
+  // Fetch preferences from backend
+  useEffect(() => {
+    const fetchPreferences = async () => {
+      try {
+        setPreferencesLoading(true);
+        const preferences = await preferencesService.getAllPreferences();
+        setCuisineTypes(preferences.cuisines);
+        setDietaryPreferences(preferences.dietaryPreferences);
+      } catch (error) {
+        console.error('Failed to fetch preferences:', error);
+        toast({
+          title: "Warning",
+          description: "Failed to load cuisine and dietary preferences. You can still complete registration.",
+          variant: "destructive",
+        });
+      } finally {
+        setPreferencesLoading(false);
+      }
+    };
+
+    fetchPreferences();
+  }, [toast]);
+
+  // Update form data when Clerk user is available
+  useEffect(() => {
+    if (clerkUser && clerkUser.firstName && clerkUser.lastName) {
+      setFormData(prev => ({
+        ...prev,
+        displayName: `${clerkUser.firstName} ${clerkUser.lastName}`.trim()
+      }));
+    } else if (clerkData?.firstName && clerkData?.lastName) {
+      setFormData(prev => ({
+        ...prev,
+        displayName: `${clerkData.firstName} ${clerkData.lastName}`.trim()
+      }));
+    }
+  }, [clerkUser, clerkData]);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -78,74 +121,28 @@ export const Register: React.FC = () => {
     }));
   };
 
-  const validateStep1 = () => {
-    if (!formData.email || !formData.password || !formData.confirmPassword || !formData.displayName) {
+  const handleCompleteRegistration = async () => {
+    if (!formData.displayName || !formData.location) {
       toast({
         title: "Missing Information",
-        description: "Please fill in all required fields",
-        variant: "destructive",
-      });
-      return false;
-    }
-
-    if (formData.password !== formData.confirmPassword) {
-      toast({
-        title: "Password Mismatch",
-        description: "Passwords do not match",
-        variant: "destructive",
-      });
-      return false;
-    }
-
-    if (formData.password.length < 8) {
-      toast({
-        title: "Weak Password",
-        description: "Password must be at least 8 characters long",
-        variant: "destructive",
-      });
-      return false;
-    }
-
-    return true;
-  };
-
-  const handleStep1Submit = () => {
-    if (validateStep1()) {
-      setStep(2);
-    }
-  };
-
-  const handleStep2Submit = () => {
-    if (!formData.location) {
-      toast({
-        title: "Location Required",
-        description: "Please provide your location for nearby deals",
+        description: "Please fill in your name and location",
         variant: "destructive",
       });
       return;
     }
-    setStep(3);
-  };
 
-  const handleFinalSubmit = async () => {
     setLoading(true);
     try {
-      // Here you would integrate with Clerk and your backend API
-      // For now, we'll simulate the registration process
-      
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await completeRegistration(formData);
       
       toast({
-        title: "Registration Successful!",
-        description: "Welcome to FoodieDeals! You can now discover amazing deals.",
+        title: "Registration Complete!",
+        description: "Welcome to FoodBargain! You can now discover amazing deals.",
       });
-      
-      navigate('/');
     } catch (error) {
       toast({
         title: "Registration Failed",
-        description: "Something went wrong. Please try again.",
+        description: error instanceof Error ? error.message : "Something went wrong. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -153,207 +150,185 @@ export const Register: React.FC = () => {
     }
   };
 
-  const renderStep1 = () => (
-    <div className="space-y-6">
-      <div className="text-center mb-8">
-        <h2 className="text-2xl font-bold text-foreground mb-2">Create Your Account</h2>
-        <p className="text-muted-foreground">Join FoodieDeals to discover amazing food deals</p>
-      </div>
+  // If user needs to complete registration after Clerk signup
+  if (needsCompletion) {
+    return (
+      <MobileLayout
+        showHeader={true}
+        headerTitle="Complete Registration"
+        showBackButton={false}
+      >
+        <div className="px-mobile py-6 bg-gradient-to-br from-gray-900 via-black to-gray-900 min-h-screen">
+          <div className="text-center mb-8">
+            <h2 className="text-2xl font-bold text-white mb-2">Almost Done!</h2>
+            <p className="text-gray-400">Complete your profile to get personalized deals</p>
+          </div>
 
-      <div className="space-y-4">
-        <div>
-          <Label htmlFor="email">Email Address</Label>
-          <Input
-            id="email"
-            type="email"
-            placeholder="your.email@example.com"
-            value={formData.email}
-            onChange={(e) => handleInputChange('email', e.target.value)}
-            className="mt-1"
-          />
-        </div>
-
-        <div>
-          <Label htmlFor="displayName">Full Name</Label>
-          <Input
-            id="displayName"
-            type="text"
-            placeholder="John Doe"
-            value={formData.displayName}
-            onChange={(e) => handleInputChange('displayName', e.target.value)}
-            className="mt-1"
-          />
-        </div>
-
-        <div>
-          <Label htmlFor="phone">Phone Number (Optional)</Label>
-          <Input
-            id="phone"
-            type="tel"
-            placeholder="+1 (555) 123-4567"
-            value={formData.phone}
-            onChange={(e) => handleInputChange('phone', e.target.value)}
-            className="mt-1"
-          />
-        </div>
-
-        <div>
-          <Label htmlFor="password">Password</Label>
-          <Input
-            id="password"
-            type="password"
-            placeholder="Enter a strong password"
-            value={formData.password}
-            onChange={(e) => handleInputChange('password', e.target.value)}
-            className="mt-1"
-          />
-        </div>
-
-        <div>
-          <Label htmlFor="confirmPassword">Confirm Password</Label>
-          <Input
-            id="confirmPassword"
-            type="password"
-            placeholder="Confirm your password"
-            value={formData.confirmPassword}
-            onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
-            className="mt-1"
-          />
-        </div>
-      </div>
-
-      <Button variant="mobile" size="mobile" onClick={handleStep1Submit}>
-        Continue
-      </Button>
-    </div>
-  );
-
-  const renderStep2 = () => (
-    <div className="space-y-6">
-      <div className="text-center mb-8">
-        <h2 className="text-2xl font-bold text-foreground mb-2">Your Location</h2>
-        <p className="text-muted-foreground">Help us find deals near you</p>
-      </div>
-
-      <div>
-        <Label htmlFor="location">Location</Label>
-        <Input
-          id="location"
-          type="text"
-          placeholder="Enter your city or address"
-          value={formData.location}
-          onChange={(e) => handleInputChange('location', e.target.value)}
-          className="mt-1"
-        />
-        <p className="text-xs text-muted-foreground mt-1">
-          We'll use this to show you nearby restaurant deals
-        </p>
-      </div>
-
-      <div className="flex gap-3">
-        <Button variant="outline" size="mobile" onClick={() => setStep(1)} className="flex-1">
-          Back
-        </Button>
-        <Button variant="mobile" size="mobile" onClick={handleStep2Submit} className="flex-1">
-          Continue
-        </Button>
-      </div>
-    </div>
-  );
-
-  const renderStep3 = () => (
-    <div className="space-y-6">
-      <div className="text-center mb-8">
-        <h2 className="text-2xl font-bold text-foreground mb-2">Your Preferences</h2>
-        <p className="text-muted-foreground">Customize your experience</p>
-      </div>
-
-      <div>
-        <h3 className="text-lg font-semibold mb-4">Favorite Cuisines</h3>
-        <div className="grid grid-cols-2 gap-3">
-          {cuisineTypes.map((cuisine) => (
-            <div
-              key={cuisine.id}
-              onClick={() => handleCuisineToggle(cuisine.id)}
-              className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                formData.cuisinePreferences.includes(cuisine.id)
-                  ? 'border-primary bg-primary/10 shadow-custom-sm'
-                  : 'border-border hover:border-primary/50'
-              }`}
-            >
-              <div className="text-center">
-                <span className="text-2xl mb-2 block">{cuisine.emoji}</span>
-                <span className="text-sm font-medium">{cuisine.name}</span>
-              </div>
+          <div className="space-y-6">
+            <div>
+              <Label htmlFor="displayName" className="text-white">Full Name</Label>
+              <Input
+                id="displayName"
+                type="text"
+                placeholder="John Doe"
+                value={formData.displayName}
+                onChange={(e) => handleInputChange('displayName', e.target.value)}
+                className="mt-1 bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+              />
             </div>
-          ))}
-        </div>
-      </div>
 
-      <div>
-        <h3 className="text-lg font-semibold mb-4">Dietary Preferences</h3>
-        <div className="grid grid-cols-2 gap-3">
-          {dietaryPreferences.map((dietary) => (
-            <div
-              key={dietary.id}
-              onClick={() => handleDietaryToggle(dietary.id)}
-              className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                formData.dietaryPreferences.includes(dietary.id)
-                  ? 'border-accent bg-accent/10 shadow-custom-sm'
-                  : 'border-border hover:border-accent/50'
-              }`}
-            >
-              <div className="text-center">
-                <span className="text-2xl mb-2 block">{dietary.emoji}</span>
-                <span className="text-sm font-medium">{dietary.name}</span>
-              </div>
+            <div>
+              <Label htmlFor="phone" className="text-white">Phone Number (Optional)</Label>
+              <Input
+                id="phone"
+                type="tel"
+                placeholder="+1 (555) 123-4567"
+                value={formData.phone}
+                onChange={(e) => handleInputChange('phone', e.target.value)}
+                className="mt-1 bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+              />
             </div>
-          ))}
+
+            <div>
+              <Label htmlFor="location" className="text-white">Location</Label>
+              <div className="mt-2">
+                <LocationPicker
+                  onLocationSelect={(coordinates, address) => {
+                    handleInputChange('location', coordinates);
+                  }}
+                  initialLocation={formData.location}
+                />
+              </div>
+              <p className="text-xs text-gray-400 mt-2">
+                We'll use your location to show you nearby restaurant deals
+              </p>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-semibold mb-4 text-white">Favorite Cuisines (Optional)</h3>
+              {preferencesLoading ? (
+                <div className="text-center py-8 text-gray-400">Loading cuisines...</div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  {cuisineTypes.map((cuisine) => (
+                    <div
+                      key={cuisine.id}
+                      onClick={() => handleCuisineToggle(cuisine.id)}
+                      className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                        formData.cuisinePreferences.includes(cuisine.id)
+                          ? 'border-blue-500 bg-blue-500/20 shadow-sm shadow-blue-500/30'
+                          : 'border-gray-600 bg-gray-800 hover:border-blue-500/50 hover:bg-gray-700'
+                      }`}
+                    >
+                      <div className="text-center">
+                        <span className="text-2xl mb-2 block">
+                          {cuisineEmojis[cuisine.name] || '🍽️'}
+                        </span>
+                        <span className="text-sm font-medium text-white">{cuisine.name}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <h3 className="text-lg font-semibold mb-4 text-white">Dietary Preferences (Optional)</h3>
+              {preferencesLoading ? (
+                <div className="text-center py-8 text-gray-400">Loading dietary preferences...</div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  {dietaryPreferences.map((dietary) => (
+                    <div
+                      key={dietary.id}
+                      onClick={() => handleDietaryToggle(dietary.id)}
+                      className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                        formData.dietaryPreferences.includes(dietary.id)
+                          ? 'border-green-500 bg-green-500/20 shadow-sm shadow-green-500/30'
+                          : 'border-gray-600 bg-gray-800 hover:border-green-500/50 hover:bg-gray-700'
+                      }`}
+                    >
+                      <div className="text-center">
+                        <span className="text-2xl mb-2 block">
+                          {dietaryEmojis[dietary.name] || '🥘'}
+                        </span>
+                        <span className="text-sm font-medium text-white">{dietary.name}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <Button 
+              variant="neon"
+              size="lg" 
+              onClick={handleCompleteRegistration}
+              disabled={loading}
+              className="w-full"
+            >
+              {loading ? 'Creating Account...' : 'Complete Registration'}
+            </Button>
+          </div>
         </div>
-      </div>
+      </MobileLayout>
+    );
+  }
 
-      <div className="flex gap-3">
-        <Button variant="outline" size="mobile" onClick={() => setStep(2)} className="flex-1">
-          Back
-        </Button>
-        <Button 
-          variant="success" 
-          size="mobile" 
-          onClick={handleFinalSubmit}
-          disabled={loading}
-          className="flex-1"
-        >
-          {loading ? 'Creating Account...' : 'Complete Registration'}
-        </Button>
-      </div>
-    </div>
-  );
-
+  // Show Clerk SignUp component for initial registration
   return (
     <MobileLayout
       showHeader={true}
       headerTitle="Sign Up"
-      showBackButton={step > 1 || true}
-      onBackClick={() => step > 1 ? setStep(step - 1) : navigate('/welcome')}
+      showBackButton={true}
+      onBackClick={() => navigate('/')}
     >
-      <div className="px-mobile py-6">
-        {/* Progress indicator */}
-        <div className="flex justify-center mb-8">
-          <div className="flex space-x-2">
-            {[1, 2, 3].map((stepNumber) => (
-              <div
-                key={stepNumber}
-                className={`w-3 h-3 rounded-full transition-colors ${
-                  stepNumber <= step ? 'bg-primary' : 'bg-muted'
-                }`}
-              />
-            ))}
+      <div className="px-mobile py-6 min-h-[calc(100vh-80px)] flex flex-col bg-gradient-to-br from-gray-900 via-black to-gray-900">
+        <div className="flex-1 flex flex-col justify-center">
+          <div className="text-center mb-8">
+            <h2 className="text-2xl font-bold text-white mb-2">Create Your Account</h2>
+            <p className="text-gray-400">Join FoodBargain to discover amazing food deals</p>
+          </div>
+
+          {/* Clerk SignUp Component */}
+          <div className="w-full max-w-md mx-auto">
+            <SignUp 
+              routing="virtual"
+              signInUrl="/login"
+              redirectUrl="/register"
+              appearance={{
+                elements: {
+                  formButtonPrimary: 'bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white border-0 shadow-lg shadow-blue-500/25',
+                  card: 'shadow-none border-0 bg-gray-800/50 backdrop-blur-sm',
+                  headerTitle: 'hidden',
+                  headerSubtitle: 'hidden',
+                  formFieldInput: 'bg-gray-700 border-gray-600 text-white focus:border-blue-500',
+                  formFieldLabel: 'text-gray-300',
+                  identityPreviewText: 'text-gray-300',
+                  identityPreviewEditButton: 'text-blue-400 hover:text-blue-300',
+                  footerActionText: 'text-gray-400',
+                  footerActionLink: 'text-blue-400 hover:text-blue-300',
+                  dividerText: 'text-gray-400',
+                  dividerLine: 'bg-gray-600',
+                  socialButtonsBlockButton: 'border-gray-600 bg-gray-700 text-white hover:bg-gray-600',
+                  otpCodeFieldInput: 'bg-gray-700 border-gray-600 text-white',
+                }
+              }}
+            />
+          </div>
+
+          <div className="mt-8 text-center">
+            <p className="text-gray-400">
+              Already have an account?{' '}
+              <button
+                onClick={() => navigate('/login')}
+                className="text-blue-400 font-medium hover:underline hover:text-blue-300 transition-colors"
+              >
+                Sign In
+              </button>
+            </p>
           </div>
         </div>
-
-        {step === 1 && renderStep1()}
-        {step === 2 && renderStep2()}
-        {step === 3 && renderStep3()}
       </div>
     </MobileLayout>
   );

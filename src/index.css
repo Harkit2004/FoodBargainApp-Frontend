@@ -6,21 +6,21 @@
 
 @layer base {
   :root {
-    /* Core brand colors */
-    --primary: 25 95% 53%; /* Vibrant orange #FF6B35 */
+    /* Core brand colors - Cool neon theme */
+    --primary: 217 91% 60%; /* Electric blue #3B82F6 */
     --primary-foreground: 0 0% 100%;
-    --primary-light: 25 100% 85%;
-    --primary-dark: 25 85% 45%;
+    --primary-light: 217 91% 85%;
+    --primary-dark: 217 91% 45%;
     
     /* Secondary colors */
-    --secondary: 45 96% 52%; /* Golden yellow #FFD23F */
-    --secondary-foreground: 25 85% 15%;
-    --secondary-light: 45 100% 88%;
+    --secondary: 142 69% 58%; /* Neon green #22C55E */
+    --secondary-foreground: 0 0% 100%;
+    --secondary-light: 142 69% 88%;
     
     /* Accent colors */
-    --accent: 155 67% 48%; /* Fresh green #2ECC71 */
+    --accent: 271 81% 56%; /* Purple accent #8B5CF6 */
     --accent-foreground: 0 0% 100%;
-    --accent-light: 155 67% 88%;
+    --accent-light: 271 81% 88%;
     
     /* Success and error states */
     --success: 142 71% 45%;
@@ -28,33 +28,35 @@
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
     
-    /* Neutral palette */
-    --background: 0 0% 100%;
-    --foreground: 222 25% 12%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --ring: 25 95% 53%;
+    /* Dark theme neutral palette */
+    --background: 0 0% 5%; /* Almost black */
+    --foreground: 0 0% 95%; /* Almost white text */
+    --muted: 0 0% 10%; /* Dark gray */
+    --muted-foreground: 0 0% 65%; /* Medium gray text */
+    --border: 0 0% 15%; /* Dark border */
+    --input: 0 0% 12%; /* Dark input background */
+    --ring: 217 91% 60%; /* Electric blue ring */
     
     /* Card and surfaces */
-    --card: 0 0% 100%;
-    --card-foreground: 222 25% 12%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222 25% 12%;
+    --card: 0 0% 8%; /* Dark card background */
+    --card-foreground: 0 0% 95%; /* Light card text */
+    --popover: 0 0% 8%; /* Dark popover */
+    --popover-foreground: 0 0% 95%; /* Light popover text */
     
-    /* Gradients */
+    /* Cool neon gradients */
     --gradient-primary: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--primary-dark)) 100%);
     --gradient-secondary: linear-gradient(135deg, hsl(var(--secondary)) 0%, hsl(var(--accent)) 100%);
-    --gradient-hero: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--secondary)) 50%, hsl(var(--accent)) 100%);
+    --gradient-hero: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--accent)) 50%, hsl(var(--secondary)) 100%);
     --gradient-card: linear-gradient(145deg, hsl(var(--card)) 0%, hsl(var(--muted)) 100%);
+    --gradient-neon: linear-gradient(45deg, #3B82F6, #8B5CF6, #22C55E);
     
-    /* Shadows */
-    --shadow-sm: 0 1px 2px 0 hsl(var(--primary) / 0.05);
-    --shadow-md: 0 4px 6px -1px hsl(var(--primary) / 0.1), 0 2px 4px -1px hsl(var(--primary) / 0.06);
-    --shadow-lg: 0 10px 15px -3px hsl(var(--primary) / 0.1), 0 4px 6px -2px hsl(var(--primary) / 0.05);
-    --shadow-xl: 0 20px 25px -5px hsl(var(--primary) / 0.1), 0 10px 10px -5px hsl(var(--primary) / 0.04);
-    --shadow-glow: 0 0 20px hsl(var(--primary) / 0.3);
+    /* Cool neon shadows */
+    --shadow-sm: 0 1px 2px 0 hsl(var(--primary) / 0.15);
+    --shadow-md: 0 4px 6px -1px hsl(var(--primary) / 0.2), 0 2px 4px -1px hsl(var(--primary) / 0.1);
+    --shadow-lg: 0 10px 15px -3px hsl(var(--primary) / 0.2), 0 4px 6px -2px hsl(var(--primary) / 0.1);
+    --shadow-xl: 0 20px 25px -5px hsl(var(--primary) / 0.2), 0 10px 10px -5px hsl(var(--primary) / 0.08);
+    --shadow-glow: 0 0 25px hsl(var(--primary) / 0.5);
+    --shadow-neon: 0 0 10px hsl(var(--accent) / 0.8), 0 0 30px hsl(var(--accent) / 0.4);
     
     /* Animations */
     --animation-bounce: bounce 1s infinite;
@@ -69,24 +71,25 @@
     --mobile-margin: 0.75rem;
   }
 
+  /* Dark theme is now default - keeping this for compatibility */
   .dark {
-    --background: 222 84% 5%;
-    --foreground: 210 40% 98%;
-    --card: 222 84% 5%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222 84% 5%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 25 95% 53%;
+    --background: 0 0% 5%;
+    --foreground: 0 0% 95%;
+    --card: 0 0% 8%;
+    --card-foreground: 0 0% 95%;
+    --popover: 0 0% 8%;
+    --popover-foreground: 0 0% 95%;
+    --primary: 217 91% 60%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 217 33% 18%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217 33% 18%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 155 67% 48%;
+    --secondary: 142 69% 58%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 0 0% 10%;
+    --muted-foreground: 0 0% 65%;
+    --accent: 271 81% 56%;
     --accent-foreground: 0 0% 100%;
-    --border: 217 33% 18%;
-    --input: 217 33% 18%;
-    --ring: 25 95% 53%;
+    --border: 0 0% 15%;
+    --input: 0 0% 12%;
+    --ring: 217 91% 60%;
   }
 }
 

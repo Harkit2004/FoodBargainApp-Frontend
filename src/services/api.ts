@@ -1,55 +1,120 @@
+import { useAuth } from '@clerk/clerk-react';
+
+declare global {
+  interface Window {
+    __clerk_token?: string;
+  }
+}
+
 // API Configuration and Base Service
-const API_BASE_URL = process.env.VITE_API_URL || '/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+
+export interface ApiResponse<T = unknown> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+  requiresRegistration?: boolean;
+}
 
 class ApiService {
-  private getAuthHeaders(): HeadersInit {
-    const token = localStorage.getItem('auth_token');
-    return {
+  private async getAuthHeaders(token?: string): Promise<HeadersInit> {
+    const headers: HeadersInit = {
       'Content-Type': 'application/json',
-      ...(token && { 'Authorization': `Bearer ${token}` })
     };
+
+    // Add authorization header if token is provided
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    return headers;
   }
 
-  async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  async request<T>(endpoint: string, options: RequestInit = {}, token?: string): Promise<ApiResponse<T>> {
     const url = `${API_BASE_URL}${endpoint}`;
     const config: RequestInit = {
       ...options,
       headers: {
-        ...this.getAuthHeaders(),
+        ...(await this.getAuthHeaders(token)),
         ...options.headers
       }
     };
 
-    const response = await fetch(url, config);
-    
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Network error' }));
-      throw new Error(error.error || 'API request failed');
+    console.log('API Request:', {
+      url,
+      method: config.method || 'GET',
+      hasToken: !!token,
+      headers: config.headers
+    });
+
+    try {
+      const response = await fetch(url, config);
+      const data = await response.json();
+      
+      console.log('API Response:', {
+        url,
+        status: response.status,
+        success: response.ok,
+        data
+      });
+      
+      if (!response.ok) {
+        return {
+          success: false,
+          error: data.error || data.message || `HTTP ${response.status}: ${response.statusText}`
+        };
+      }
+
+      // If response is already in our ApiResponse format
+      if (typeof data === 'object' && 'success' in data) {
+        return data as ApiResponse<T>;
+      }
+
+      // Wrap raw data in ApiResponse format
+      return {
+        success: true,
+        data: data as T
+      };
+    } catch (error) {
+      console.error('API Request Error:', {
+        url,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Network error'
+      };
     }
-
-    return response.json();
   }
 
-  async get<T>(endpoint: string): Promise<T> {
-    return this.request<T>(endpoint, { method: 'GET' });
+  async get<T>(endpoint: string, token?: string): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, { method: 'GET' }, token);
   }
 
-  async post<T>(endpoint: string, data?: any): Promise<T> {
+  async post<T>(endpoint: string, data?: unknown, token?: string): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, {
       method: 'POST',
       body: data ? JSON.stringify(data) : undefined
-    });
+    }, token);
   }
 
-  async put<T>(endpoint: string, data?: any): Promise<T> {
+  async put<T>(endpoint: string, data?: unknown, token?: string): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, {
       method: 'PUT',
       body: data ? JSON.stringify(data) : undefined
-    });
+    }, token);
   }
 
-  async delete<T>(endpoint: string): Promise<T> {
-    return this.request<T>(endpoint, { method: 'DELETE' });
+  async delete<T>(endpoint: string, token?: string): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, { method: 'DELETE' }, token);
+  }
+
+  async patch<T>(endpoint: string, data?: unknown, token?: string): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, {
+      method: 'PATCH',
+      body: data ? JSON.stringify(data) : undefined
+    }, token);
   }
 }
 

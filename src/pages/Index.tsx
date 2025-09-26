@@ -9,7 +9,7 @@ const Index = () => {
     const isAuthenticated = false; // Replace with actual auth check
     
     if (isAuthenticated) {
-      navigate('/');
+      navigate('/home');
     } else {
       navigate('/welcome');
     }

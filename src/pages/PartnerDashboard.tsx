@@ -1,11 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { MobileLayout } from '@/components/MobileLayout';
 import { BottomNavigation } from '@/components/BottomNavigation';
-import { Plus, Store, TrendingUp, Eye, Edit, Trash2, Users, DollarSign } from 'lucide-react';
+import { Plus, Store, TrendingUp, Eye, Edit, Trash2, Users, DollarSign, Loader2, Play } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth as useClerkAuth } from '@clerk/clerk-react';
+import { partnerService, type Restaurant as ServiceRestaurant, type Deal as ServiceDeal } from '@/services/partnerService';
+import { formatDateShort, getCurrentDateString } from '@/utils/dateUtils';
 
+// Local interfaces for UI-specific data
 interface Restaurant {
   id: number;
   name: string;
@@ -14,69 +18,107 @@ interface Restaurant {
   totalDeals: number;
   activeDeals: number;
   rating: number;
-  totalViews: number;
 }
 
 interface Deal {
   id: number;
   title: string;
   restaurant: string;
-  discountPercentage: number;
   status: 'active' | 'expired' | 'draft';
-  views: number;
-  claims: number;
   startDate: string;
   endDate: string;
 }
 
-const mockRestaurants: Restaurant[] = [
-  {
-    id: 1,
-    name: "Mario's Pizzeria",
-    address: "123 Main St, Toronto",
-    isActive: true,
-    totalDeals: 5,
-    activeDeals: 3,
-    rating: 4.8,
-    totalViews: 1250
-  }
-];
-
-const mockDeals: Deal[] = [
-  {
-    id: 1,
-    title: "50% Off All Pizzas",
-    restaurant: "Mario's Pizzeria",
-    discountPercentage: 50,
-    status: 'active',
-    views: 324,
-    claims: 42,
-    startDate: "2024-01-15",
-    endDate: "2024-01-25"
-  },
-  {
-    id: 2,
-    title: "Buy 2 Get 1 Free Pasta",
-    restaurant: "Mario's Pizzeria",
-    discountPercentage: 33,
-    status: 'active',
-    views: 189,
-    claims: 28,
-    startDate: "2024-01-10",
-    endDate: "2024-01-30"
-  }
-];
-
 export const PartnerDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [restaurants] = useState<Restaurant[]>(mockRestaurants);
-  const [deals] = useState<Deal[]>(mockDeals);
+  const { getToken } = useClerkAuth();
+  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
+  const [deals, setDeals] = useState<Deal[]>([]);
   const [activeTab, setActiveTab] = useState<'overview' | 'restaurants' | 'deals'>('overview');
+  const [isLoading, setIsLoading] = useState(true);
 
-  const totalViews = deals.reduce((sum, deal) => sum + deal.views, 0);
-  const totalClaims = deals.reduce((sum, deal) => sum + deal.claims, 0);
+  useEffect(() => {
+    const fetchRestaurants = async () => {
+      try {
+        const token = await getToken();
+        if (!token) return;
+        
+        const response = await partnerService.getRestaurants(token);
+        if (response.success && response.data) {
+          // Transform service data to UI format
+          const transformedRestaurants: Restaurant[] = response.data.map((restaurant: ServiceRestaurant) => ({
+            id: restaurant.id,
+            name: restaurant.name,
+            address: `${restaurant.streetAddress || ''} ${restaurant.city || ''}`.trim() || 'No address',
+            isActive: restaurant.isActive,
+            totalDeals: restaurant.totalDeals,
+            activeDeals: restaurant.activeDeals,
+            rating: restaurant.rating,
+          }));
+          setRestaurants(transformedRestaurants);
+        } else {
+          console.error('Failed to fetch restaurants:', response.error);
+        }
+      } catch (error) {
+        console.error('Error fetching restaurants:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load restaurants. Please try again.",
+          variant: "destructive",
+        });
+      }
+    };
+
+    const fetchDeals = async () => {
+      try {
+        const token = await getToken();
+        if (!token) return;
+        
+        const response = await partnerService.getDeals(token);
+        if (response.success && response.data) {
+          // Transform service data to UI format
+          const transformedDeals: Deal[] = response.data.map((deal: ServiceDeal) => ({
+            id: deal.id,
+            title: deal.title,
+            restaurant: deal.restaurant.name,
+            discountPercentage: 0, // TODO: This should come from backend
+            status: deal.status as 'active' | 'expired' | 'draft',
+            startDate: deal.startDate,
+            endDate: deal.endDate,
+          }));
+          setDeals(transformedDeals);
+        } else {
+          console.error('Failed to fetch deals:', response.error);
+        }
+      } catch (error) {
+        console.error('Error fetching deals:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load deals. Please try again.",
+          variant: "destructive",
+        });
+      }
+    };
+
+    const loadData = async () => {
+      setIsLoading(true);
+      await Promise.all([fetchRestaurants(), fetchDeals()]);
+      setIsLoading(false);
+    };
+    
+    loadData();
+  }, [getToken, toast]);
+
   const activeDealsCount = deals.filter(deal => deal.status === 'active').length;
+
+  // Helper function to check if a deal can be activated
+  const canActivateDeal = (deal: Deal): boolean => {
+    if (deal.status !== 'draft') return false;
+    
+    const today = getCurrentDateString();
+    return today >= deal.startDate && today <= deal.endDate;
+  };
 
   const StatCard: React.FC<{ 
     title: string; 
@@ -101,11 +143,83 @@ export const PartnerDashboard: React.FC = () => {
     </div>
   );
 
+  const handleActivateDeal = async (dealId: number) => {
+    try {
+      const token = await getToken();
+      if (!token) return;
+      
+      const response = await partnerService.updateDealStatus(dealId, 'active', token);
+      if (response.success) {
+        // Update the deal status in the local state
+        setDeals(prev => prev.map(deal => 
+          deal.id === dealId 
+            ? { ...deal, status: 'active' as const }
+            : deal
+        ));
+        toast({
+          title: "Success",
+          description: "Deal activated successfully.",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: response.error || "Failed to activate deal.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Error activating deal:', error);
+      toast({
+        title: "Error",
+        description: "Failed to activate deal. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteDeal = async (dealId: number) => {
+    try {
+      const token = await getToken();
+      if (!token) return;
+      
+      const response = await partnerService.deleteDeal(dealId, token);
+      if (response.success) {
+        setDeals(prev => prev.filter(deal => deal.id !== dealId));
+        toast({
+          title: "Success",
+          description: "Deal deleted successfully.",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: response.error || "Failed to delete deal.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Error deleting deal:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete deal. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const DealCard: React.FC<{ deal: Deal }> = ({ deal }) => (
-    <div className="bg-card rounded-xl p-4 shadow-custom-sm mb-3">
+    <div className={`bg-card rounded-xl p-4 shadow-custom-sm mb-3 ${
+      canActivateDeal(deal) ? 'ring-2 ring-primary/20 border-primary/20' : ''
+    }`}>
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1">
-          <h3 className="font-semibold mb-1">{deal.title}</h3>
+          <div className="flex items-center gap-2 mb-1">
+            <h3 className="font-semibold">{deal.title}</h3>
+            {canActivateDeal(deal) && (
+              <span className="px-2 py-0.5 bg-primary/10 text-primary text-xs rounded-full font-medium">
+                Ready to Activate
+              </span>
+            )}
+          </div>
           <p className="text-sm text-muted-foreground">{deal.restaurant}</p>
         </div>
         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -119,38 +233,50 @@ export const PartnerDashboard: React.FC = () => {
         </span>
       </div>
       
-      <div className="grid grid-cols-3 gap-3 mb-3">
-        <div className="text-center">
-          <p className="text-lg font-bold text-primary">{deal.discountPercentage}%</p>
-          <p className="text-xs text-muted-foreground">Discount</p>
-        </div>
-        <div className="text-center">
-          <p className="text-lg font-bold">{deal.views}</p>
-          <p className="text-xs text-muted-foreground">Views</p>
-        </div>
-        <div className="text-center">
-          <p className="text-lg font-bold text-success">{deal.claims}</p>
-          <p className="text-xs text-muted-foreground">Claims</p>
-        </div>
-      </div>
-      
       <div className="flex justify-between items-center text-xs text-muted-foreground mb-3">
-        <span>Ends: {new Date(deal.endDate).toLocaleDateString()}</span>
-        <span>Started: {new Date(deal.startDate).toLocaleDateString()}</span>
+        <span>Ends: {formatDateShort(deal.endDate)}</span>
+        <span>Started: {formatDateShort(deal.startDate)}</span>
       </div>
       
       <div className="flex gap-2">
-        <Button variant="outline" size="sm" className="flex-1">
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className="flex-1"
+          onClick={() => navigate(`/partner/deals/${deal.id}`)}
+        >
           <Eye className="w-4 h-4 mr-1" />
           View
         </Button>
-        <Button variant="outline" size="sm" className="flex-1">
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className="flex-1"
+          onClick={() => navigate(`/partner/deals/${deal.id}/edit`)}
+        >
           <Edit className="w-4 h-4 mr-1" />
           Edit
         </Button>
-        <Button variant="destructive" size="sm">
-          <Trash2 className="w-4 h-4" />
-        </Button>
+        {canActivateDeal(deal) && (
+          <Button 
+            variant="default" 
+            size="sm"
+            onClick={() => handleActivateDeal(deal.id)}
+            className="flex-1"
+          >
+            <Play className="w-4 h-4 mr-1" />
+            Activate
+          </Button>
+        )}
+        {deal.status === 'draft' && (
+          <Button 
+            variant="destructive" 
+            size="sm"
+            onClick={() => handleDeleteDeal(deal.id)}
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
+        )}
       </div>
     </div>
   );
@@ -160,19 +286,6 @@ export const PartnerDashboard: React.FC = () => {
       {/* Quick Stats */}
       <div className="grid grid-cols-2 gap-3">
         <StatCard
-          title="Total Views"
-          value={totalViews.toString()}
-          icon={<Eye className="w-5 h-5 text-primary" />}
-          trend="+12%"
-        />
-        <StatCard
-          title="Total Claims"
-          value={totalClaims.toString()}
-          icon={<Users className="w-5 h-5 text-success" />}
-          trend="+8%"
-          color="success"
-        />
-        <StatCard
           title="Active Deals"
           value={activeDealsCount.toString()}
           icon={<TrendingUp className="w-5 h-5 text-accent" />}
@@ -180,9 +293,8 @@ export const PartnerDashboard: React.FC = () => {
         />
         <StatCard
           title="Revenue"
-          value="$2,450"
+          value="$0"
           icon={<DollarSign className="w-5 h-5 text-secondary" />}
-          trend="+15%"
           color="secondary"
         />
       </div>
@@ -202,7 +314,7 @@ export const PartnerDashboard: React.FC = () => {
           <Button 
             variant="outline" 
             className="h-20 flex-col gap-2"
-            onClick={() => navigate('/partner/restaurants/create')}
+            onClick={() => navigate('/partner/restaurant/create')}
           >
             <Store className="w-6 h-6" />
             Add Restaurant
@@ -222,9 +334,26 @@ export const PartnerDashboard: React.FC = () => {
             View All
           </Button>
         </div>
-        {deals.slice(0, 2).map(deal => (
-          <DealCard key={deal.id} deal={deal} />
-        ))}
+        {deals.length > 0 ? (
+          deals.slice(0, 2).map(deal => (
+            <DealCard key={deal.id} deal={deal} />
+          ))
+        ) : (
+          <div className="bg-card rounded-xl p-6 shadow-custom-sm text-center">
+            <TrendingUp className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+            <h4 className="font-semibold mb-2">No deals yet</h4>
+            <p className="text-sm text-muted-foreground mb-4">
+              Create your first deal to start attracting customers
+            </p>
+            <Button 
+              variant="default"
+              onClick={() => navigate('/partner/deals/create')}
+            >
+              <Plus className="w-4 h-4 mr-1" />
+              Create Your First Deal
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -236,54 +365,83 @@ export const PartnerDashboard: React.FC = () => {
         <Button 
           variant="default" 
           size="sm"
-          onClick={() => navigate('/partner/restaurants/create')}
+          onClick={() => navigate('/partner/restaurant/create')}
         >
           <Plus className="w-4 h-4 mr-1" />
           Add
         </Button>
       </div>
 
-      {restaurants.map(restaurant => (
-        <div key={restaurant.id} className="bg-card rounded-xl p-4 shadow-custom-sm">
-          <div className="flex items-start justify-between mb-3">
-            <div className="flex-1">
-              <h4 className="font-semibold">{restaurant.name}</h4>
-              <p className="text-sm text-muted-foreground">{restaurant.address}</p>
+      {restaurants.length > 0 ? (
+        restaurants.map(restaurant => (
+          <div key={restaurant.id} className="bg-card rounded-xl p-4 shadow-custom-sm">
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex-1">
+                <h4 className="font-semibold">{restaurant.name}</h4>
+                <p className="text-sm text-muted-foreground">{restaurant.address}</p>
+              </div>
+              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                restaurant.isActive 
+                  ? 'bg-success/10 text-success' 
+                  : 'bg-muted text-muted-foreground'
+              }`}>
+                {restaurant.isActive ? 'Active' : 'Inactive'}
+              </span>
             </div>
-            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-              restaurant.isActive 
-                ? 'bg-success/10 text-success' 
-                : 'bg-muted text-muted-foreground'
-            }`}>
-              {restaurant.isActive ? 'Active' : 'Inactive'}
-            </span>
+            
+            <div className="grid grid-cols-3 gap-3 mb-3">
+              <div className="text-center">
+                <p className="text-lg font-bold">
+                  {restaurant.rating > 0 ? restaurant.rating.toFixed(1) : 'N/A'}
+                </p>
+                <p className="text-xs text-muted-foreground">Rating</p>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-bold">{restaurant.activeDeals}</p>
+                <p className="text-xs text-muted-foreground">Active</p>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-bold">{restaurant.totalDeals}</p>
+                <p className="text-xs text-muted-foreground">Total</p>
+              </div>
+            </div>
+            
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="flex-1"
+                onClick={() => navigate(`/partner/restaurants/${restaurant.id}/manage`)}
+              >
+                Manage
+              </Button>
+              <Button 
+                variant="default" 
+                size="sm" 
+                className="flex-1"
+                onClick={() => navigate(`/partner/restaurants/${restaurant.id}/menu`)}
+              >
+                View Menu
+              </Button>
+            </div>
           </div>
-          
-          <div className="grid grid-cols-3 gap-3 mb-3">
-            <div className="text-center">
-              <p className="text-lg font-bold">{restaurant.rating}</p>
-              <p className="text-xs text-muted-foreground">Rating</p>
-            </div>
-            <div className="text-center">
-              <p className="text-lg font-bold">{restaurant.activeDeals}</p>
-              <p className="text-xs text-muted-foreground">Active Deals</p>
-            </div>
-            <div className="text-center">
-              <p className="text-lg font-bold">{restaurant.totalViews}</p>
-              <p className="text-xs text-muted-foreground">Total Views</p>
-            </div>
-          </div>
-          
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="flex-1">
-              Manage
-            </Button>
-            <Button variant="default" size="sm" className="flex-1">
-              View Menu
-            </Button>
-          </div>
+        ))
+      ) : (
+        <div className="bg-card rounded-xl p-6 shadow-custom-sm text-center">
+          <Store className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+          <h4 className="font-semibold mb-2">No restaurants yet</h4>
+          <p className="text-sm text-muted-foreground mb-4">
+            Add your first restaurant to start managing your business
+          </p>
+          <Button 
+            variant="default"
+            onClick={() => navigate('/partner/restaurant/create')}
+          >
+            <Plus className="w-4 h-4 mr-1" />
+            Add Your First Restaurant
+          </Button>
         </div>
-      ))}
+      )}
     </div>
   );
 
@@ -301,9 +459,26 @@ export const PartnerDashboard: React.FC = () => {
         </Button>
       </div>
 
-      {deals.map(deal => (
-        <DealCard key={deal.id} deal={deal} />
-      ))}
+      {deals.length > 0 ? (
+        deals.map(deal => (
+          <DealCard key={deal.id} deal={deal} />
+        ))
+      ) : (
+        <div className="bg-card rounded-xl p-6 shadow-custom-sm text-center">
+          <TrendingUp className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+          <h4 className="font-semibold mb-2">No deals created</h4>
+          <p className="text-sm text-muted-foreground mb-4">
+            Create deals to attract customers and boost your business
+          </p>
+          <Button 
+            variant="default"
+            onClick={() => navigate('/partner/deals/create')}
+          >
+            <Plus className="w-4 h-4 mr-1" />
+            Create Your First Deal
+          </Button>
+        </div>
+      )}
     </div>
   );
 
@@ -318,13 +493,13 @@ export const PartnerDashboard: React.FC = () => {
           {/* Tab Navigation */}
           <div className="flex bg-muted rounded-xl p-1 mb-6">
             {[
-              { key: 'overview', label: 'Overview' },
-              { key: 'restaurants', label: 'Restaurants' },
-              { key: 'deals', label: 'Deals' }
+              { key: 'overview' as const, label: 'Overview' },
+              { key: 'restaurants' as const, label: 'Restaurants' },
+              { key: 'deals' as const, label: 'Deals' }
             ].map(tab => (
               <button
                 key={tab.key}
-                onClick={() => setActiveTab(tab.key as any)}
+                onClick={() => setActiveTab(tab.key)}
                 className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all ${
                   activeTab === tab.key
                     ? 'bg-background text-foreground shadow-custom-sm'
@@ -336,9 +511,20 @@ export const PartnerDashboard: React.FC = () => {
             ))}
           </div>
 
-          {activeTab === 'overview' && renderOverview()}
-          {activeTab === 'restaurants' && renderRestaurants()}
-          {activeTab === 'deals' && renderDeals()}
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="text-center">
+                <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary" />
+                <p className="text-muted-foreground">Loading your dashboard...</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              {activeTab === 'overview' && renderOverview()}
+              {activeTab === 'restaurants' && renderRestaurants()}
+              {activeTab === 'deals' && renderDeals()}
+            </>
+          )}
         </div>
       </MobileLayout>
       <BottomNavigation />

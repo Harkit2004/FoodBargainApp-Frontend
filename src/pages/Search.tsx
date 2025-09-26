@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { MobileLayout } from '@/components/MobileLayout';
@@ -14,6 +14,19 @@ import {
   DollarSign
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@clerk/clerk-react';
+import { restaurantService, Restaurant } from '@/services/restaurantService';
+import { dealsService, Deal } from '@/services/dealsService';
+import { 
+  getCurrentLocation, 
+  calculateDistance, 
+  formatDistance, 
+  getLocationCoordinates,
+  DEFAULT_COORDINATES,
+  type Coordinates 
+} from '@/utils/locationUtils';
+import heroImage from '@/assets/hero-food.jpg';
 
 interface SearchResult {
   id: number;
@@ -28,108 +41,305 @@ interface SearchResult {
   imageUrl: string;
   isBookmarked: boolean;
   tags: string[];
+  originalData: Restaurant | Deal;
 }
 
-const mockResults: SearchResult[] = [
-  {
-    id: 1,
-    type: 'deal',
-    title: "50% Off All Pizzas",
-    subtitle: "Mario's Pizzeria",
-    description: "Get half price on all our delicious wood-fired pizzas",
-    rating: 4.8,
-    distance: "0.3 km",
-    discount: 50,
-    price: "$12.49",
-    imageUrl: "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=400&h=300&fit=crop",
-    isBookmarked: false,
-    tags: ["Pizza", "Italian", "Hot Deal"]
-  },
-  {
-    id: 2,
-    type: 'restaurant',
-    title: "Sakura Sushi",
-    subtitle: "Japanese • Sushi Bar",
-    description: "Authentic Japanese cuisine with fresh sushi and traditional dishes",
-    rating: 4.9,
-    distance: "1.2 km",
-    imageUrl: "https://images.unsplash.com/photo-1579584425555-c3ce17fd4351?w=400&h=300&fit=crop",
-    isBookmarked: true,
-    tags: ["Japanese", "Sushi", "Fine Dining"]
-  },
-  {
-    id: 3,
-    type: 'deal',
-    title: "Buy 1 Get 1 Free Burgers",
-    subtitle: "Burger Palace",
-    description: "Double the deliciousness with our BOGO burger deal",
-    rating: 4.6,
-    distance: "0.8 km",
-    discount: 50,
-    price: "$9.50",
-    imageUrl: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&h=300&fit=crop",
-    isBookmarked: false,
-    tags: ["Burger", "American", "BOGO"]
-  }
-];
-
 const popularSearches = [
-  "Pizza deals", "Sushi nearby", "Vegetarian options", "Fast delivery", 
-  "Breakfast specials", "Coffee shops", "Late night food", "Family restaurants"
-];
-
-const categories = [
-  { name: "Deals", icon: "🎯", filter: "deals" },
-  { name: "Restaurants", icon: "🏪", filter: "restaurants" },
-  { name: "Fast Food", icon: "🍔", filter: "fast-food" },
-  { name: "Fine Dining", icon: "🍽️", filter: "fine-dining" },
-  { name: "Delivery", icon: "🚚", filter: "delivery" },
-  { name: "Takeout", icon: "🥡", filter: "takeout" }
+  "Pizza", "Sushi", "Vegetarian", "Burgers", 
+  "Breakfast", "Coffee", "Italian", "Chinese"
 ];
 
 export const Search: React.FC = () => {
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const { getToken } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [selectedFilter, setSelectedFilter] = useState('all');
+  const [userLocation, setUserLocation] = useState<Coordinates | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const handleSearch = async (query: string) => {
+  // Request user's location on component mount
+  useEffect(() => {
+    const requestLocation = async () => {
+      try {
+        const location = await getCurrentLocation();
+        setUserLocation(location);
+        setLocationError(null);
+      } catch (error) {
+        console.warn('Failed to get user location:', error);
+        setLocationError(error instanceof Error ? error.message : 'Location unavailable');
+        // Use default Toronto coordinates as fallback
+        setUserLocation(DEFAULT_COORDINATES);
+      }
+    };
+
+    requestLocation();
+  }, []);
+
+  // Listen for bookmark changes from other pages
+  useEffect(() => {
+    const handleBookmarkChange = (event: CustomEvent) => {
+      const { id, type, isBookmarked } = event.detail;
+      setSearchResults(prev =>
+        prev.map(result =>
+          result.id === id && result.type === type
+            ? { ...result, isBookmarked }
+            : result
+        )
+      );
+    };
+
+    window.addEventListener('bookmarkChanged', handleBookmarkChange as EventListener);
+    return () => {
+      window.removeEventListener('bookmarkChanged', handleBookmarkChange as EventListener);
+    };
+  }, []);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const performSearch = useCallback(async (query: string) => {
+    console.log('Search triggered with query:', query);
     if (!query.trim()) {
       setSearchResults([]);
+      setIsSearching(false);
       return;
     }
 
     setIsSearching(true);
-    // Simulate API call
-    setTimeout(() => {
-      const filtered = mockResults.filter(result =>
-        result.title.toLowerCase().includes(query.toLowerCase()) ||
-        result.subtitle.toLowerCase().includes(query.toLowerCase()) ||
-        result.description.toLowerCase().includes(query.toLowerCase()) ||
-        result.tags.some(tag => tag.toLowerCase().includes(query.toLowerCase()))
-      );
-      setSearchResults(filtered);
-      setIsSearching(false);
-    }, 500);
-  };
+    try {
+      console.log('Making API calls...');
+      const token = await getToken();
+      const [restaurantResponse, dealResponse] = await Promise.all([
+        restaurantService.searchRestaurants({ query, limit: 10 }, token || undefined),
+        dealsService.getDeals({ status: 'active', limit: 10 }, token || undefined)
+      ]);
+      
+      console.log('Restaurant response:', restaurantResponse);
+      console.log('Deal response:', dealResponse);
 
-  const handleBookmarkToggle = (id: number) => {
-    setSearchResults(prev =>
-      prev.map(result =>
-        result.id === id
-          ? { ...result, isBookmarked: !result.isBookmarked }
-          : result
-      )
-    );
+      const results: SearchResult[] = [];
+      const addedIds = new Set<string>(); // Track added items to prevent duplicates
 
-    const result = searchResults.find(r => r.id === id);
-    if (result) {
+      // Add restaurant results
+      if (restaurantResponse.success && restaurantResponse.data) {
+        restaurantResponse.data.restaurants.forEach((restaurant) => {
+          const uniqueId = `restaurant-${restaurant.id}`;
+          if (!addedIds.has(uniqueId) && 
+              (restaurant.name.toLowerCase().includes(query.toLowerCase()) ||
+               restaurant.description?.toLowerCase().includes(query.toLowerCase()))) {
+            const city = restaurant.city?.trim();
+            const province = restaurant.province?.trim();
+            const streetAddress = restaurant.streetAddress?.trim();
+            
+            const hasValidCity = city && city !== '' && city.toLowerCase() !== 'unknown';
+            const hasValidProvince = province && province !== '' && province.toLowerCase() !== 'unknown';
+            const hasValidAddress = streetAddress && streetAddress !== '' && streetAddress.toLowerCase() !== 'unknown';
+            
+            let subtitle = '';
+            if (hasValidAddress) {
+              subtitle = streetAddress;
+            } else if (hasValidCity && hasValidProvince) {
+              subtitle = `${city}, ${province}`;
+            } else if (hasValidCity) {
+              subtitle = city;
+            } else if (hasValidProvince) {
+              subtitle = province;
+            } else {
+              subtitle = 'Unknown';
+            }
+
+            // Calculate actual distance
+            let distance = '2.5 km'; // fallback
+            if (userLocation) {
+              const restaurantCoords = getLocationCoordinates(restaurant);
+              if (restaurantCoords) {
+                const distanceKm = calculateDistance(userLocation, restaurantCoords);
+                distance = formatDistance(distanceKm);
+              }
+            }
+            
+            addedIds.add(uniqueId);
+            results.push({
+              id: restaurant.id,
+              type: 'restaurant',
+              title: restaurant.name,
+              subtitle: subtitle,
+              description: restaurant.description || 'Restaurant serving delicious food',
+              rating: restaurant.ratingAvg ? parseFloat(restaurant.ratingAvg.toString()) : undefined,
+              distance: distance,
+              imageUrl: heroImage,
+              isBookmarked: restaurant.isBookmarked || false,
+              tags: [hasValidCity ? city : 'Toronto', 'Restaurant'],
+              originalData: restaurant
+            });
+          }
+        });
+      }
+
+      // Add deal results  
+      if (dealResponse.success && dealResponse.data) {
+        dealResponse.data.deals.forEach((deal) => {
+          const uniqueId = `deal-${deal.id}`;
+          if (!addedIds.has(uniqueId) &&
+              (deal.title.toLowerCase().includes(query.toLowerCase()) ||
+               deal.description?.toLowerCase().includes(query.toLowerCase()) ||
+               deal.restaurant.name.toLowerCase().includes(query.toLowerCase()))) {
+            
+            const city = deal.restaurant.city?.trim();
+            const province = deal.restaurant.province?.trim();
+            const streetAddress = deal.restaurant.streetAddress?.trim();
+            
+            const hasValidCity = city && city !== '' && city.toLowerCase() !== 'unknown';
+            const hasValidProvince = province && province !== '' && province.toLowerCase() !== 'unknown';
+            const hasValidAddress = streetAddress && streetAddress !== '' && streetAddress.toLowerCase() !== 'unknown';
+            
+            let locationTag = 'Toronto';
+            if (hasValidAddress) {
+              locationTag = streetAddress;
+            } else if (hasValidCity) {
+              locationTag = city;
+            } else if (hasValidProvince) {
+              locationTag = province;
+            }
+
+            // Calculate actual distance using restaurant coordinates
+            let distance = '2.5 km'; // fallback
+            if (userLocation) {
+              const restaurantCoords = getLocationCoordinates(deal.restaurant);
+              if (restaurantCoords) {
+                const distanceKm = calculateDistance(userLocation, restaurantCoords);
+                distance = formatDistance(distanceKm);
+              }
+            }
+            
+            addedIds.add(uniqueId);
+            results.push({
+              id: deal.id,
+              type: 'deal',
+              title: deal.title,
+              subtitle: deal.restaurant.name,
+              description: deal.description || 'Great deal available!',
+              rating: undefined, // Rating not available in deal data
+              distance: distance,
+              price: 'Deal',
+              imageUrl: heroImage,
+              isBookmarked: deal.isBookmarked || false,
+              tags: ['Deal', locationTag],
+              originalData: deal
+            });
+          }
+        });
+      }
+
+      console.log('Final search results:', results);
+      setSearchResults(results);
+    } catch (error) {
+      console.error('Search failed:', error);
       toast({
-        title: result.isBookmarked ? "Removed from favorites" : "Added to favorites",
-        description: result.isBookmarked ? 
+        title: "Search Error",
+        description: "Failed to search. Please try again.",
+        variant: "destructive",
+      });
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  }, [toast, getToken, userLocation]);
+
+  const handleSearch = useCallback((query: string) => {
+    // Clear previous timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    // Clear results immediately if query is empty
+    if (!query.trim()) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    // Set a new timeout for debounced search
+    searchTimeoutRef.current = setTimeout(() => {
+      performSearch(query);
+    }, 500); // 500ms debounce
+  }, [performSearch]);
+
+  const handleBookmarkToggle = async (id: number) => {
+    console.log('Search bookmark toggle called:', id);
+    const result = searchResults.find(r => r.id === id);
+    if (!result) {
+      console.log('No result found for id:', id);
+      return;
+    }
+
+    console.log('Found result:', result.type, result.title, 'current bookmark status:', result.isBookmarked);
+
+    try {
+      const token = await getToken();
+      console.log('Token obtained:', !!token);
+      
+      const isCurrentlyBookmarked = result.isBookmarked === true;
+      
+      if (result.type === 'restaurant') {
+        if (isCurrentlyBookmarked) {
+          console.log('Unbookmarking restaurant...');
+          await restaurantService.unbookmarkRestaurant(id, token || undefined);
+        } else {
+          console.log('Bookmarking restaurant...');
+          await restaurantService.bookmarkRestaurant(id, true, token || undefined);
+        }
+      } else if (result.type === 'deal') {
+        if (isCurrentlyBookmarked) {
+          console.log('Unfavoriting deal...');
+          await dealsService.unfavoriteDeal(id, token || undefined);
+        } else {
+          console.log('Favoriting deal...');
+          await dealsService.favoriteDeal(id, token || undefined);
+        }
+      }
+
+      const newBookmarkStatus = !isCurrentlyBookmarked;
+      
+      // Update local state
+      setSearchResults(prev =>
+        prev.map(searchResult =>
+          searchResult.id === id
+            ? { ...searchResult, isBookmarked: newBookmarkStatus }
+            : searchResult
+        )
+      );
+
+      // Trigger a custom event to notify other pages of bookmark changes
+      window.dispatchEvent(new CustomEvent('bookmarkChanged', { 
+        detail: { 
+          id, 
+          type: result.type, 
+          isBookmarked: newBookmarkStatus 
+        } 
+      }));
+
+      toast({
+        title: isCurrentlyBookmarked ? "Removed from favorites" : "Added to favorites",
+        description: isCurrentlyBookmarked ? 
           `${result.title} removed from your favorites` : 
           `${result.title} added to your favorites`,
+      });
+    } catch (error) {
+      console.error('Error in search bookmark toggle:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update bookmark status",
+        variant: "destructive",
       });
     }
   };
@@ -150,11 +360,17 @@ export const Search: React.FC = () => {
           </div>
         )}
         <button
-          onClick={() => handleBookmarkToggle(result.id)}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const isCurrentlyBookmarked = result.isBookmarked === true;
+            console.log('Search heart button clicked!', result.id, result.type, 'isBookmarked:', result.isBookmarked, 'treated as:', isCurrentlyBookmarked);
+            handleBookmarkToggle(result.id);
+          }}
           className="absolute top-3 right-3 p-2 bg-background/80 rounded-full hover:bg-background transition-colors"
         >
           <Heart 
-            className={`w-5 h-5 ${result.isBookmarked ? 'fill-red-500 text-red-500' : 'text-muted-foreground'}`} 
+            className={`w-5 h-5 ${result.isBookmarked === true ? 'fill-red-500 text-red-500' : 'text-muted-foreground'}`} 
           />
         </button>
       </div>
@@ -215,7 +431,18 @@ export const Search: React.FC = () => {
           ))}
         </div>
         
-        <Button variant="default" size="sm" className="w-full">
+        <Button 
+          variant="default" 
+          size="sm" 
+          className="w-full"
+          onClick={() => {
+            if (result.type === 'deal') {
+              navigate(`/deals/${result.id}`);
+            } else {
+              navigate(`/restaurants/${result.id}`);
+            }
+          }}
+        >
           {result.type === 'deal' ? 'View Deal' : 'View Restaurant'}
         </Button>
       </div>
@@ -223,10 +450,11 @@ export const Search: React.FC = () => {
   );
 
   return (
-    <>
-      <MobileLayout showHeader={false}>
-        {/* Search Header */}
-        <div className="bg-gradient-primary text-primary-foreground px-mobile py-4 shadow-custom-md">
+    <div className="min-h-screen bg-background flex justify-center">
+      <div className="w-full max-w-md mx-auto">
+        <MobileLayout showHeader={false}>
+          {/* Search Header */}
+          <div className="bg-gradient-primary text-primary-foreground px-6 py-4 shadow-custom-md">
           <h1 className="text-xl font-bold mb-4">Search</h1>
           
           <div className="relative">
@@ -255,32 +483,9 @@ export const Search: React.FC = () => {
           </div>
         </div>
 
-        <div className="px-mobile pt-4 pb-20">
+          <div className="px-6 pt-4 pb-20">
           {!searchQuery && (
             <>
-              {/* Categories */}
-              <div className="mb-6">
-                <h2 className="text-lg font-semibold mb-3">Browse Categories</h2>
-                <div className="grid grid-cols-3 gap-3">
-                  {categories.map((category) => (
-                    <button
-                      key={category.filter}
-                      onClick={() => {
-                        setSelectedFilter(category.filter);
-                        toast({
-                          title: "Filter Applied",
-                          description: `Showing ${category.name.toLowerCase()}`,
-                        });
-                      }}
-                      className="bg-card rounded-xl p-4 shadow-custom-sm hover:shadow-custom-md transition-all text-center"
-                    >
-                      <span className="text-2xl block mb-2">{category.icon}</span>
-                      <span className="text-sm font-medium">{category.name}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
               {/* Popular Searches */}
               <div>
                 <h2 className="text-lg font-semibold mb-3">Popular Searches</h2>
@@ -337,9 +542,10 @@ export const Search: React.FC = () => {
               )}
             </div>
           )}
-        </div>
-      </MobileLayout>
-      <BottomNavigation />
-    </>
+          </div>
+        </MobileLayout>
+        <BottomNavigation />
+      </div>
+    </div>
   );
 };

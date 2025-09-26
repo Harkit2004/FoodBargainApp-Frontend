@@ -9,15 +9,16 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-gradient-primary text-primary-foreground hover:shadow-custom-md hover:scale-105 shadow-custom-sm",
-        destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-        outline: "border-2 border-primary text-primary bg-background hover:bg-primary hover:text-primary-foreground",
-        secondary: "bg-gradient-secondary text-secondary-foreground hover:shadow-custom-md hover:scale-105 shadow-custom-sm",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
-        link: "text-primary underline-offset-4 hover:underline",
-        success: "bg-success text-success-foreground hover:bg-success/90 shadow-custom-sm hover:shadow-custom-md",
-        hero: "bg-gradient-hero text-primary-foreground hover:shadow-glow hover:scale-105 shadow-custom-lg font-bold",
-        mobile: "bg-primary text-primary-foreground hover:bg-primary-dark shadow-custom-sm active:shadow-none touch-manipulation",
+        default: "bg-gradient-primary text-primary-foreground hover:shadow-custom-md hover:scale-105 shadow-custom-sm hover:shadow-glow transition-all duration-300",
+        destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90 hover:shadow-lg",
+        outline: "border-2 border-primary text-primary bg-card hover:bg-primary hover:text-primary-foreground hover:shadow-glow transition-all duration-300",
+        secondary: "bg-gradient-secondary text-secondary-foreground hover:shadow-custom-md hover:scale-105 shadow-custom-sm hover:shadow-neon transition-all duration-300",
+        ghost: "hover:bg-accent/20 hover:text-accent-foreground transition-colors duration-200",
+        link: "text-primary underline-offset-4 hover:underline hover:text-accent transition-colors duration-200",
+        success: "bg-success text-success-foreground hover:bg-success/90 shadow-custom-sm hover:shadow-custom-md hover:shadow-glow",
+        hero: "bg-gradient-hero text-primary-foreground hover:shadow-glow hover:scale-105 shadow-custom-lg font-bold hover:shadow-neon transition-all duration-400",
+        mobile: "bg-primary text-primary-foreground hover:bg-primary-dark shadow-custom-sm active:shadow-none touch-manipulation hover:shadow-glow transition-all duration-200",
+        neon: "bg-gradient-to-r from-primary via-accent to-secondary text-white font-bold hover:scale-105 hover:shadow-neon shadow-glow transition-all duration-300",
       },
       size: {
         default: "h-12 px-6 py-3",

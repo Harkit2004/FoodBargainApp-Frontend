@@ -1,5 +1,7 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useUser, useAuth as useClerkAuth } from '@clerk/clerk-react';
+import { apiService } from '@/services/api';
 
 interface User {
   id: string;
@@ -7,15 +9,27 @@ interface User {
   email: string;
   displayName: string;
   isPartner?: boolean;
+  location?: string;
+  phone?: string;
+  cuisinePreferences?: number[];
+  dietaryPreferences?: number[];
+}
+
+interface RegistrationData {
+  displayName: string;
+  location: string;
+  phone?: string;
+  cuisinePreferences: number[];
+  dietaryPreferences: number[];
 }
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (clerkUserId: string) => Promise<void>;
-  logout: () => void;
-  checkAuthStatus: () => Promise<void>;
+  checkBackendAuth: () => Promise<void>;
+  completeRegistration: (userData: RegistrationData) => Promise<void>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -31,94 +45,120 @@ export const useAuth = () => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const { isSignedIn, user: clerkUser, isLoaded } = useUser();
+  const { getToken, signOut } = useClerkAuth();
   const navigate = useNavigate();
 
-  const checkAuthStatus = async () => {
+  // Check if user exists in our backend after Clerk authentication
+  const checkBackendAuth = useCallback(async () => {
+    if (!isSignedIn || !clerkUser) {
+      setUser(null);
+      setIsLoading(false);
+      return;
+    }
+
     try {
       setIsLoading(true);
-      const token = localStorage.getItem('auth_token');
-      const clerkUserId = localStorage.getItem('clerk_user_id');
       
-      if (!token || !clerkUserId) {
+      // Get JWT token from Clerk
+      const token = await getToken();
+      if (!token) {
         setUser(null);
         return;
       }
 
-      // Verify token with backend
-      const response = await fetch('/api/auth/verify', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ clerkUserId })
-      });
+      // Check if user exists in our backend
+      const response = await apiService.post<{ user: User }>('/auth/login', {
+        clerkUserId: clerkUser.id
+      }, token);
 
-      if (response.ok) {
-        const data = await response.json();
-        setUser(data.user);
+      if (response.success && response.data) {
+        // User exists in backend, set user data
+        setUser(response.data.user);
+      } else if (response.requiresRegistration) {
+        // User needs to complete registration in our backend
+        setUser(null);
+        navigate('/register', { 
+          state: { 
+            clerkUserId: clerkUser.id,
+            email: clerkUser.emailAddresses[0]?.emailAddress,
+            firstName: clerkUser.firstName,
+            lastName: clerkUser.lastName
+          } 
+        });
       } else {
-        // Token is invalid, clear storage
-        localStorage.removeItem('auth_token');
-        localStorage.removeItem('clerk_user_id');
+        console.error('Backend auth failed:', response.error);
         setUser(null);
       }
     } catch (error) {
-      console.error('Auth check failed:', error);
+      console.error('Backend auth check failed:', error);
       setUser(null);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [isSignedIn, clerkUser, getToken, navigate]);
 
-  const login = async (clerkUserId: string) => {
+  // Complete user registration in backend
+  const completeRegistration = async (userData: RegistrationData) => {
+    if (!clerkUser) {
+      throw new Error('No Clerk user found');
+    }
+
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ clerkUserId })
-      });
+      const registrationData = {
+        clerkUserId: clerkUser.id,
+        displayName: userData.displayName || `${clerkUser.firstName} ${clerkUser.lastName}`.trim(),
+        location: userData.location,
+        phone: userData.phone,
+        cuisinePreferences: userData.cuisinePreferences || [],
+        dietaryPreferences: userData.dietaryPreferences || [],
+      };
 
-      const data = await response.json();
+      const token = await getToken();
+      const response = await apiService.post<{ user: User }>('/auth/register', registrationData, token);
 
-      if (data.success) {
-        setUser(data.data.user);
-        localStorage.setItem('clerk_user_id', clerkUserId);
-        // In a real app, you'd get the JWT token from Clerk
-        localStorage.setItem('auth_token', 'mock_jwt_token');
+      if (response.success && response.data) {
+        setUser(response.data.user);
         navigate('/');
-      } else if (data.requiresRegistration) {
-        // Redirect to complete registration
-        navigate('/register', { state: { clerkUserId } });
       } else {
-        throw new Error(data.error || 'Login failed');
+        throw new Error(response.error || 'Registration failed');
       }
     } catch (error) {
-      console.error('Login failed:', error);
+      console.error('Registration failed:', error);
       throw error;
     }
   };
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('clerk_user_id');
-    navigate('/welcome');
+  // Logout from both Clerk and our app
+  const logout = async () => {
+    try {
+      // Sign out from Clerk
+      await signOut();
+      
+      // Clear our user state
+      setUser(null);
+      
+      // Navigate to home page
+      navigate('/');
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
   };
 
+  // Check backend auth when Clerk auth state changes
   useEffect(() => {
-    checkAuthStatus();
-  }, []);
+    if (isLoaded) {
+      checkBackendAuth();
+    }
+  }, [isLoaded, checkBackendAuth]);
 
   const value = {
     user,
-    isAuthenticated: !!user,
-    isLoading,
-    login,
-    logout,
-    checkAuthStatus
+    isAuthenticated: !!user && !!isSignedIn,
+    isLoading: !isLoaded || isLoading,
+    checkBackendAuth,
+    completeRegistration,
+    logout
   };
 
   return (
