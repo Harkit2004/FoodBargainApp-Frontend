@@ -3,11 +3,8 @@ import { Button } from '@/components/ui/button';
 import { MobileLayout } from '@/components/MobileLayout';
 import { BottomNavigation } from '@/components/BottomNavigation';
 import { 
-  Heart, 
-  Star, 
+  Heart,
   MapPin, 
-  Clock, 
-  Phone, 
   Calendar,
   Share,
   ExternalLink,
@@ -133,6 +130,36 @@ export const DealDetail: React.FC = () => {
     return deal.status === 'expired' || new Date(deal.endDate) < new Date();
   };
 
+  const handleShare = async () => {
+    if (!deal) return;
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: deal.title,
+          text: deal.description || '',
+          url: window.location.href,
+        });
+        toast({
+          title: 'Shared successfully',
+          description: 'Deal has been shared',
+        });
+      } else {
+        // Fallback: copy to clipboard
+        await navigator.clipboard.writeText(window.location.href);
+        toast({
+          title: 'Link copied!',
+          description: 'Deal link has been copied to clipboard',
+        });
+      }
+    } catch (error) {
+      // User cancelled or error occurred
+      if ((error as Error).name !== 'AbortError') {
+        console.error('Error sharing:', error);
+      }
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex justify-center">
@@ -200,18 +227,7 @@ export const DealDetail: React.FC = () => {
                   />
                 </button>
                 <button
-                  onClick={() => {
-                    navigator.share?.({
-                      title: deal.title,
-                      text: deal.description,
-                      url: window.location.href,
-                    }).catch(() => {
-                      toast({
-                        title: "Share link copied",
-                        description: "Deal link has been copied to clipboard",
-                      });
-                    });
-                  }}
+                  onClick={handleShare}
                   className="p-2 bg-background/80 rounded-full hover:bg-background transition-colors"
                 >
                   <Share className="w-5 h-5 text-muted-foreground" />

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { MobileLayout } from '@/components/MobileLayout';
 import { BottomNavigation } from '@/components/BottomNavigation';
-import { Search, MapPin, Bell, Filter, Heart, Star, ArrowRight, Shield, Clock } from 'lucide-react';
+import { Search, MapPin, Bell, Filter, Heart, Star, ArrowRight, Shield, Clock, Share2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAuth as useClerkAuth } from '@clerk/clerk-react';
@@ -134,6 +134,37 @@ export const Home: React.FC = () => {
         description: "Failed to update favorite status.",
         variant: "destructive",
       });
+    }
+  };
+
+  const handleShare = async (deal: ApiDeal, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: deal.title,
+          text: deal.description || '',
+          url: `${window.location.origin}/deals/${deal.id}`,
+        });
+        toast({
+          title: 'Shared successfully',
+          description: 'Deal has been shared',
+        });
+      } else {
+        // Fallback: copy to clipboard
+        await navigator.clipboard.writeText(`${window.location.origin}/deals/${deal.id}`);
+        toast({
+          title: 'Link copied!',
+          description: 'Deal link has been copied to clipboard',
+        });
+      }
+    } catch (error) {
+      // User cancelled or error occurred
+      if ((error as Error).name !== 'AbortError') {
+        console.error('Error sharing:', error);
+      }
     }
   };
 
@@ -325,6 +356,14 @@ export const Home: React.FC = () => {
             }}
           >
             <MapPin className="w-4 h-4" />
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="border-gray-600 text-gray-300 hover:bg-gray-700"
+            onClick={(e) => handleShare(deal, e)}
+          >
+            <Share2 className="w-4 h-4" />
           </Button>
         </div>
         

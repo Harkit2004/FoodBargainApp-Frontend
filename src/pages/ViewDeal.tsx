@@ -4,7 +4,7 @@ import { MobileLayout } from '@/components/MobileLayout';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth as useClerkAuth } from '@clerk/clerk-react';
-import { Edit, Trash2, Loader2, Calendar, MapPin, Tag, Users, DollarSign } from 'lucide-react';
+import { Edit, Trash2, Loader2, Calendar, MapPin, Tag, Users, DollarSign, Share2 } from 'lucide-react';
 import { partnerService, Deal } from '@/services/partnerService';
 import { formatDateLong } from '@/utils/dateUtils';
 
@@ -91,6 +91,36 @@ export const ViewDeal: React.FC = () => {
         return 'bg-secondary/10 text-secondary';
       default:
         return 'bg-muted text-muted-foreground';
+    }
+  };
+
+  const handleShare = async () => {
+    if (!deal) return;
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: deal.title,
+          text: deal.description || '',
+          url: `${window.location.origin}/deals/${deal.id}`,
+        });
+        toast({
+          title: 'Shared successfully',
+          description: 'Deal has been shared',
+        });
+      } else {
+        // Fallback: copy to clipboard
+        await navigator.clipboard.writeText(`${window.location.origin}/deals/${deal.id}`);
+        toast({
+          title: 'Link copied!',
+          description: 'Deal link has been copied to clipboard',
+        });
+      }
+    } catch (error) {
+      // User cancelled or error occurred
+      if ((error as Error).name !== 'AbortError') {
+        console.error('Error sharing:', error);
+      }
     }
   };
 
@@ -248,13 +278,24 @@ export const ViewDeal: React.FC = () => {
         <div className="flex gap-3">
           <Button
             variant="outline"
+            onClick={handleShare}
+            className="flex-1"
+          >
+            <Share2 className="w-4 h-4 mr-2" />
+            Share Deal
+          </Button>
+          <Button
+            variant="outline"
             onClick={() => navigate(`/partner/deals/${deal.id}/edit`)}
             className="flex-1"
             disabled={isDeleting}
           >
             <Edit className="w-4 h-4 mr-2" />
-            Edit Deal
+            Edit
           </Button>
+        </div>
+
+        <div className="flex gap-3 mt-3">
           <Button
             variant="destructive"
             onClick={handleDeleteDeal}
