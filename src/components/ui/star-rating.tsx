@@ -54,28 +54,39 @@ export const StarRating: React.FC<StarRatingProps> = ({
         onMouseLeave={handleMouseLeave}
       >
         {[1, 2, 3, 4, 5].map((star) => (
-          <button
-            key={star}
-            type="button"
-            disabled={readOnly}
-            className={cn(
-              "transition-colors",
-              !readOnly && "hover:scale-110 cursor-pointer",
-              readOnly && "cursor-default"
-            )}
-            onClick={() => handleStarClick(star)}
-            onMouseEnter={() => handleStarHover(star)}
-          >
-            <Star
+          readOnly ? (
+            <div key={star} className="transition-colors">
+              <Star
+                className={cn(
+                  sizes[size],
+                  "transition-colors",
+                  star <= displayRating
+                    ? "fill-yellow-400 text-yellow-400"
+                    : "fill-gray-200 text-gray-200 dark:fill-gray-600 dark:text-gray-600"
+                )}
+              />
+            </div>
+          ) : (
+            <button
+              key={star}
+              type="button"
               className={cn(
-                sizes[size],
-                "transition-colors",
-                star <= displayRating
-                  ? "fill-yellow-400 text-yellow-400"
-                  : "fill-gray-200 text-gray-200 dark:fill-gray-600 dark:text-gray-600"
+                "transition-colors hover:scale-110 cursor-pointer"
               )}
-            />
-          </button>
+              onClick={() => handleStarClick(star)}
+              onMouseEnter={() => handleStarHover(star)}
+            >
+              <Star
+                className={cn(
+                  sizes[size],
+                  "transition-colors",
+                  star <= displayRating
+                    ? "fill-yellow-400 text-yellow-400"
+                    : "fill-gray-200 text-gray-200 dark:fill-gray-600 dark:text-gray-600"
+                )}
+              />
+            </button>
+          )
         ))}
       </div>
       {showRating && (

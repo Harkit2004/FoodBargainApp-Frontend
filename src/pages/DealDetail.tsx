@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { MobileLayout } from '@/components/MobileLayout';
 import { BottomNavigation } from '@/components/BottomNavigation';
+import { RatingDialog } from '@/components/RatingDialog';
+import { RatingsView } from '@/components/RatingsView';
+import { StarRating } from '@/components/ui/star-rating';
 import { 
   Heart,
   MapPin, 
@@ -10,13 +13,16 @@ import {
   ExternalLink,
   Utensils,
   DollarSign,
-  Loader2
+  Loader2,
+  Star,
+  MessageSquare
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth as useClerkAuth } from '@clerk/clerk-react';
 import { dealsService, Deal } from '@/services/dealsService';
 import { partnerService } from '@/services/partnerService';
+import { ratingService, MyRating } from '@/services/ratingService';
 import { formatDateLong } from '@/utils/dateUtils';
 import heroImage from '@/assets/hero-food.jpg';
 
@@ -29,6 +35,10 @@ export const DealDetail: React.FC = () => {
   const { getToken } = useClerkAuth();
   const [deal, setDeal] = useState<Deal | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [ratingDialogOpen, setRatingDialogOpen] = useState(false);
+  const [ratingsViewOpen, setRatingsViewOpen] = useState(false);
+  const [userRating, setUserRating] = useState<MyRating | null>(null);
+  const [ratingStats, setRatingStats] = useState<{ averageRating: number; totalCount: number } | null>(null);
 
   useEffect(() => {
     const fetchDeal = async () => {
@@ -90,6 +100,58 @@ export const DealDetail: React.FC = () => {
 
     fetchDeal();
   }, [dealId, getToken, toast]);
+
+  // Load ratings data
+  useEffect(() => {
+    const loadRatingsData = async () => {
+      if (!dealId) return;
+
+      try {
+        const token = await getToken();
+        const dealIdNum = parseInt(dealId);
+
+        // Get rating statistics
+        const statsResponse = await ratingService.getRatingStats('deal', dealIdNum, token || undefined);
+        if (statsResponse.success && statsResponse.data) {
+          setRatingStats(statsResponse.data);
+        }
+
+        // Check if user has already rated
+        const userRatingCheck = await ratingService.hasUserRated('deal', dealIdNum, token || undefined);
+        if (userRatingCheck.hasRated && userRatingCheck.rating) {
+          setUserRating(userRatingCheck.rating);
+        }
+      } catch (error) {
+        console.error('Error loading ratings data:', error);
+      }
+    };
+
+    loadRatingsData();
+  }, [dealId, getToken]);
+
+  const handleRatingSubmitted = async () => {
+    // Reload ratings data after submission
+    if (!dealId) return;
+
+    try {
+      const token = await getToken();
+      const dealIdNum = parseInt(dealId);
+
+      // Refresh rating statistics
+      const statsResponse = await ratingService.getRatingStats('deal', dealIdNum, token || undefined);
+      if (statsResponse.success && statsResponse.data) {
+        setRatingStats(statsResponse.data);
+      }
+
+      // Refresh user rating
+      const userRatingCheck = await ratingService.hasUserRated('deal', dealIdNum, token || undefined);
+      if (userRatingCheck.hasRated && userRatingCheck.rating) {
+        setUserRating(userRatingCheck.rating);
+      }
+    } catch (error) {
+      console.error('Error reloading ratings data:', error);
+    }
+  };
 
   const toggleBookmark = async () => {
     if (!deal) return;
@@ -303,7 +365,72 @@ export const DealDetail: React.FC = () => {
                 </div>
               </div>
 
+              {/* Ratings Section */}
+              <div className="bg-card rounded-xl p-4 shadow-custom-sm mb-6">
+                <h3 className="font-semibold mb-3 flex items-center gap-2">
+                  <Star className="w-5 h-5" />
+                  Ratings & Reviews
+                </h3>
+                
+                {ratingStats && ratingStats.totalCount > 0 ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="text-3xl font-bold">{ratingStats.averageRating.toFixed(1)}</div>
+                        <div>
+                          <StarRating rating={ratingStats.averageRating} readOnly size="sm" />
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {ratingStats.totalCount} review{ratingStats.totalCount !== 1 ? 's' : ''}
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setRatingsViewOpen(true)}
+                      >
+                        <MessageSquare className="w-4 h-4 mr-1" />
+                        View Reviews
+                      </Button>
+                    </div>
 
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => setRatingDialogOpen(true)}
+                    >
+                      <Star className="w-4 h-4 mr-2" />
+                      {userRating ? 'Update Your Rating' : 'Rate This Deal'}
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="text-center py-4">
+                    <p className="text-muted-foreground mb-3">No reviews yet</p>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => setRatingDialogOpen(true)}
+                    >
+                      <Star className="w-4 h-4 mr-2" />
+                      Be the First to Review
+                    </Button>
+                  </div>
+                )}
+
+                {userRating && (
+                  <div className="mt-3 pt-3 border-t border-border">
+                    <p className="text-sm text-muted-foreground mb-2">Your rating:</p>
+                    <div className="flex items-center gap-2">
+                      <StarRating rating={userRating.rating} readOnly size="sm" />
+                      <span className="text-sm font-medium">{userRating.rating}/5</span>
+                    </div>
+                    {userRating.comment && (
+                      <p className="text-sm text-muted-foreground mt-2">"{userRating.comment}"</p>
+                    )}
+                  </div>
+                )}
+              </div>
 
               {/* Action Buttons */}
               <div className="space-y-3">
@@ -333,6 +460,29 @@ export const DealDetail: React.FC = () => {
           </div>
         </MobileLayout>
         <BottomNavigation />
+
+        {/* Rating Dialogs */}
+        <RatingDialog
+          isOpen={ratingDialogOpen}
+          onClose={() => setRatingDialogOpen(false)}
+          targetType="deal"
+          targetId={deal.id}
+          targetName={deal.title}
+          existingRating={userRating ? {
+            id: userRating.id,
+            rating: userRating.rating,
+            comment: userRating.comment || undefined
+          } : undefined}
+          onRatingSubmitted={handleRatingSubmitted}
+        />
+
+        <RatingsView
+          isOpen={ratingsViewOpen}
+          onClose={() => setRatingsViewOpen(false)}
+          targetType="deal"
+          targetId={deal.id}
+          targetName={deal.title}
+        />
       </div>
     </div>
   );

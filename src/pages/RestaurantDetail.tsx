@@ -11,7 +11,6 @@ import {
   ChevronDown,
   ChevronUp,
   MessageSquare,
-  Plus,
   Tag,
   Calendar
 } from 'lucide-react';
@@ -43,6 +42,8 @@ export const RestaurantDetail: React.FC = () => {
   const [showRatingDialog, setShowRatingDialog] = useState(false);
   const [showRatingsView, setShowRatingsView] = useState(false);
   const [selectedMenuItem, setSelectedMenuItem] = useState<{ id: number; name: string } | null>(null);
+  const [menuItemRatings, setMenuItemRatings] = useState<{ [itemId: number]: { averageRating: number; totalCount: number } }>({});
+  const [userMenuItemRatings, setUserMenuItemRatings] = useState<{ [itemId: number]: MyRating }>({});
 
   const loadRestaurant = useCallback(async () => {
     if (!id) return;
@@ -76,6 +77,70 @@ export const RestaurantDetail: React.FC = () => {
     }
   }, [id, toast, navigate, getToken]);
 
+  const loadUserRating = useCallback(async () => {
+    if (!id) return;
+    
+    try {
+      const token = await getToken();
+      const { hasRated, rating } = await ratingService.hasUserRated('restaurant', parseInt(id), token || undefined);
+      
+      if (hasRated && rating) {
+        setUserRating(rating);
+      }
+    } catch (error) {
+      console.error('Failed to load user rating:', error);
+    }
+  }, [id, getToken]);
+
+  const loadMenuItemRatings = useCallback(async (itemIds: number[]) => {
+    if (itemIds.length === 0) return;
+    
+    try {
+      const token = await getToken();
+      
+      // Load aggregate rating stats
+      const ratingsPromises = itemIds.map(itemId => 
+        ratingService.getRatingStats('menu_item', itemId, token || undefined)
+      );
+      
+      // Load user's existing ratings for these items
+      const userRatingsPromises = itemIds.map(itemId =>
+        ratingService.hasUserRated('menu_item', itemId, token || undefined)
+      );
+      
+      const [ratingsResults, userRatingsResults] = await Promise.all([
+        Promise.all(ratingsPromises),
+        Promise.all(userRatingsPromises)
+      ]);
+      
+      const ratingsMap: { [itemId: number]: { averageRating: number; totalCount: number } } = {};
+      const userRatingsMap: { [itemId: number]: MyRating } = {};
+      
+      itemIds.forEach((itemId, index) => {
+        console.log(`Item ${itemId} - Rating result:`, ratingsResults[index]);
+        console.log(`Item ${itemId} - User rating result:`, userRatingsResults[index]);
+        
+        if (ratingsResults[index].success && ratingsResults[index].data) {
+          ratingsMap[itemId] = ratingsResults[index].data;
+          console.log(`Added rating for item ${itemId}:`, ratingsMap[itemId]);
+        }
+        
+        if (userRatingsResults[index].hasRated && userRatingsResults[index].rating) {
+          userRatingsMap[itemId] = userRatingsResults[index].rating!;
+          console.log(`Added user rating for item ${itemId}:`, userRatingsMap[itemId]);
+        }
+      });
+      
+      console.log('Final ratingsMap to merge:', ratingsMap);
+      console.log('Final userRatingsMap to merge:', userRatingsMap);
+      
+      setMenuItemRatings(prev => ({ ...prev, ...ratingsMap }));
+      setUserMenuItemRatings(prev => ({ ...prev, ...userRatingsMap }));
+    } catch (error) {
+      console.error('Failed to load menu item ratings:', error);
+    }
+  }, [getToken]);
+
   const loadMenu = useCallback(async () => {
     if (!id) return;
     
@@ -96,9 +161,16 @@ export const RestaurantDetail: React.FC = () => {
         });
         setMenuItems(itemsBySection);
         
-        // Auto-expand first section
+        // Auto-expand first section and load its ratings
         if (response.data.sections.length > 0) {
-          setExpandedSections({ [response.data.sections[0].id]: true });
+          const firstSectionId = response.data.sections[0].id;
+          setExpandedSections({ [firstSectionId]: true });
+          
+          // Load ratings for items in the first section
+          if (itemsBySection[firstSectionId]) {
+            const itemIds = itemsBySection[firstSectionId].map(item => item.id);
+            await loadMenuItemRatings(itemIds);
+          }
         }
       }
     } catch (error) {
@@ -111,22 +183,7 @@ export const RestaurantDetail: React.FC = () => {
     } finally {
       setIsLoadingMenu(false);
     }
-  }, [id, toast]);
-
-  const loadUserRating = useCallback(async () => {
-    if (!id) return;
-    
-    try {
-      const token = await getToken();
-      const { hasRated, rating } = await ratingService.hasUserRated('restaurant', parseInt(id), token || undefined);
-      
-      if (hasRated && rating) {
-        setUserRating(rating);
-      }
-    } catch (error) {
-      console.error('Failed to load user rating:', error);
-    }
-  }, [id, getToken]);
+  }, [id, toast, loadMenuItemRatings]);
 
   useEffect(() => {
     loadRestaurant();
@@ -172,11 +229,19 @@ export const RestaurantDetail: React.FC = () => {
     }
   };
 
-  const toggleSection = (sectionId: number) => {
+  const toggleSection = async (sectionId: number) => {
+    const isExpanding = !expandedSections[sectionId];
+    
     setExpandedSections(prev => ({
       ...prev,
-      [sectionId]: !prev[sectionId]
+      [sectionId]: isExpanding
     }));
+
+    // Load ratings for items in this section when expanding
+    if (isExpanding && menuItems[sectionId]) {
+      const itemIds = menuItems[sectionId].map(item => item.id);
+      await loadMenuItemRatings(itemIds);
+    }
   };
 
   const formatPrice = (priceCents: number) => {
@@ -189,20 +254,28 @@ export const RestaurantDetail: React.FC = () => {
   };
 
   const handleRateMenuItem = (item: MenuItem) => {
-    // Menu item ratings are currently not fully supported
-    toast({
-      title: "Feature not available",
-      description: "Menu item ratings are coming soon!",
-      variant: "default",
-    });
-    // setSelectedMenuItem({ id: item.id, name: item.name });
-    // setShowRatingDialog(true);
+    setSelectedMenuItem({ id: item.id, name: item.name });
+    setShowRatingDialog(true);
   };
 
-  const handleRatingSubmitted = () => {
+  const handleRatingSubmitted = async () => {
+    // Store the selected item before it gets cleared
+    const itemToRefresh = selectedMenuItem;
+    
+    console.log('Rating submitted callback - item:', itemToRefresh);
+    
     // Reload restaurant data to get updated rating
     loadRestaurant();
     loadUserRating();
+    
+    // Reload menu item ratings if a menu item was rated
+    if (itemToRefresh) {
+      console.log('Refreshing ratings for item:', itemToRefresh.id);
+      await loadMenuItemRatings([itemToRefresh.id]);
+    }
+    
+    // Clear selection after refresh is complete
+    setSelectedMenuItem(null);
   };
 
   const handleViewRatings = (targetType: 'restaurant' | 'menu_item', targetId: number) => {
@@ -210,6 +283,11 @@ export const RestaurantDetail: React.FC = () => {
     if (targetType === 'restaurant') {
       setShowRatingsView(true);
     }
+  };
+
+  const handleViewMenuItemRatings = (item: MenuItem) => {
+    setSelectedMenuItem({ id: item.id, name: item.name });
+    setShowRatingsView(true);
   };
 
   const getHoursStatus = (openingTime?: string, closingTime?: string) => {
@@ -457,6 +535,16 @@ export const RestaurantDetail: React.FC = () => {
                                 <div className="flex-1">
                                   <h4 className="font-medium text-white">{item.name}</h4>
                                   <p className="text-sm text-gray-400 mt-1">{item.description}</p>
+                                  
+                                  {/* Menu Item Rating Display */}
+                                  {menuItemRatings[item.id] && menuItemRatings[item.id].totalCount > 0 && (
+                                    <div className="flex items-center gap-2 mt-2">
+                                      <StarRating rating={menuItemRatings[item.id].averageRating} readOnly size="sm" />
+                                      <span className="text-sm text-gray-400">
+                                        {menuItemRatings[item.id].averageRating.toFixed(1)} ({menuItemRatings[item.id].totalCount} {menuItemRatings[item.id].totalCount === 1 ? 'review' : 'reviews'})
+                                      </span>
+                                    </div>
+                                  )}
                                 </div>
                                 <div className="ml-4 text-right">
                                   <span className="text-lg font-bold text-green-400">
@@ -472,16 +560,22 @@ export const RestaurantDetail: React.FC = () => {
                                   size="sm"
                                   onClick={() => handleRateMenuItem(item)}
                                   className="text-xs flex items-center gap-1 text-gray-400 hover:text-white"
-                                  disabled
                                 >
-                                  <Plus className="w-3 h-3" />
-                                  Rate Item (Coming Soon)
+                                  <Star className="w-3 h-3" />
+                                  {userMenuItemRatings[item.id] ? 'Update Rating' : 'Rate Item'}
                                 </Button>
                                 
-                                {/* Placeholder for item rating display - can be expanded later */}
-                                <div className="text-xs text-gray-500">
-                                  Menu item ratings coming soon
-                                </div>
+                                {menuItemRatings[item.id] && menuItemRatings[item.id].totalCount > 0 && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleViewMenuItemRatings(item)}
+                                    className="text-xs flex items-center gap-1 text-gray-400 hover:text-white"
+                                  >
+                                    <MessageSquare className="w-3 h-3" />
+                                    View Reviews ({menuItemRatings[item.id].totalCount})
+                                  </Button>
+                                )}
                               </div>
                             </div>
                           ))}
@@ -503,25 +597,43 @@ export const RestaurantDetail: React.FC = () => {
         {/* Rating Dialog */}
         <RatingDialog
           isOpen={showRatingDialog}
-          onClose={() => setShowRatingDialog(false)}
+          onClose={() => {
+            setShowRatingDialog(false);
+            // Clear selectedMenuItem when manually closing (not submitting)
+            // Use setTimeout to ensure it happens after potential submission
+            setTimeout(() => setSelectedMenuItem(null), 100);
+          }}
           targetType={selectedMenuItem ? 'menu_item' : 'restaurant'}
           targetId={selectedMenuItem ? selectedMenuItem.id : restaurant.id}
           targetName={selectedMenuItem ? selectedMenuItem.name : restaurant.name}
-          existingRating={!selectedMenuItem && userRating ? {
-            id: userRating.id,
-            rating: userRating.rating,
-            comment: userRating.comment
-          } : undefined}
+          existingRating={
+            selectedMenuItem && userMenuItemRatings[selectedMenuItem.id]
+              ? {
+                  id: userMenuItemRatings[selectedMenuItem.id].id,
+                  rating: userMenuItemRatings[selectedMenuItem.id].rating,
+                  comment: userMenuItemRatings[selectedMenuItem.id].comment || undefined
+                }
+              : !selectedMenuItem && userRating
+              ? {
+                  id: userRating.id,
+                  rating: userRating.rating,
+                  comment: userRating.comment || undefined
+                }
+              : undefined
+          }
           onRatingSubmitted={handleRatingSubmitted}
         />
         
         {/* Ratings View */}
         <RatingsView
           isOpen={showRatingsView}
-          onClose={() => setShowRatingsView(false)}
-          targetType="restaurant"
-          targetId={restaurant.id}
-          targetName={restaurant.name}
+          onClose={() => {
+            setShowRatingsView(false);
+            setSelectedMenuItem(null);
+          }}
+          targetType={selectedMenuItem ? 'menu_item' : 'restaurant'}
+          targetId={selectedMenuItem ? selectedMenuItem.id : restaurant.id}
+          targetName={selectedMenuItem ? selectedMenuItem.name : restaurant.name}
         />
       </div>
     </div>
