@@ -8,7 +8,6 @@ import {
   Store,
   MapPin,
   Phone,
-  Clock,
   Building,
   Loader2
 } from 'lucide-react';
@@ -26,8 +25,6 @@ interface PartnerFormData {
   province: string;
   postalCode: string;
   phone: string;
-  openingTime: string;
-  closingTime: string;
 }
 
 // Move InputField component outside to prevent re-creation on every render
@@ -91,8 +88,6 @@ export const PartnerRegistration: React.FC = () => {
     province: 'ON',
     postalCode: '',
     phone: '',
-    openingTime: '09:00',
-    closingTime: '21:00',
   });
 
   const [errors, setErrors] = useState<Partial<PartnerFormData>>({});
@@ -363,11 +358,11 @@ export const PartnerRegistration: React.FC = () => {
                 </div>
               </div>
 
-              {/* Contact & Hours */}
+              {/* Contact Information */}
               <div className="bg-card rounded-xl p-4 shadow-custom-sm">
                 <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
                   <Phone className="w-5 h-5" />
-                  Contact & Hours
+                  Contact Information
                 </h2>
                 
                 <div className="space-y-4">
@@ -382,30 +377,6 @@ export const PartnerRegistration: React.FC = () => {
                     errors={errors}
                     onChange={handleInputChange}
                   />
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <InputField
-                      label="Opening Time"
-                      field="openingTime"
-                      placeholder="09:00"
-                      icon={<Clock className="w-4 h-4" />}
-                      type="time"
-                      formData={formData}
-                      errors={errors}
-                      onChange={handleInputChange}
-                    />
-                    
-                    <InputField
-                      label="Closing Time"
-                      field="closingTime"
-                      placeholder="21:00"
-                      icon={<Clock className="w-4 h-4" />}
-                      type="time"
-                      formData={formData}
-                      errors={errors}
-                      onChange={handleInputChange}
-                    />
-                  </div>
                 </div>
               </div>
 

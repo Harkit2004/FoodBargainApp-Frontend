@@ -187,13 +187,6 @@ export const Profile: React.FC = () => {
             />
 
             <MenuOption
-              icon={<Bell className="w-5 h-5" />}
-              label="Notifications"
-              description="Control your notification preferences"
-              onClick={() => navigate('/profile/notifications')}
-            />
-
-            <MenuOption
               icon={<Heart className="w-5 h-5" />}
               label="Favorites"
               description="View your bookmarked deals and restaurants"

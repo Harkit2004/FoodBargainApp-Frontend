@@ -1,14 +1,26 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { MobileLayout } from '@/components/MobileLayout';
 import { BottomNavigation } from '@/components/BottomNavigation';
-import { Settings, Bell, Shield, Globe, Palette, Volume2 } from 'lucide-react';
+import { Bell, Palette } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 
 export const ProfileSettings: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+    // Apply theme to document
+    document.documentElement.classList.toggle('dark', newTheme === 'dark');
+    toast({
+      title: "Theme Updated",
+      description: `Switched to ${newTheme} mode`,
+    });
+  };
 
   const SettingOption: React.FC<{
     icon: React.ReactNode;
@@ -51,51 +63,15 @@ export const ProfileSettings: React.FC = () => {
               />
 
               <SettingOption
-                icon={<Shield className="w-5 h-5" />}
-                label="Privacy & Security"
-                description="Control your privacy settings"
-                onClick={() => {
-                  toast({
-                    title: "Coming Soon",
-                    description: "Privacy settings will be available soon!",
-                  });
-                }}
-              />
-
-              <SettingOption
-                icon={<Globe className="w-5 h-5" />}
-                label="Language & Region"
-                description="Set your preferred language and location"
-                onClick={() => {
-                  toast({
-                    title: "Coming Soon",
-                    description: "Language settings will be available soon!",
-                  });
-                }}
-              />
-
-              <SettingOption
                 icon={<Palette className="w-5 h-5" />}
                 label="Appearance"
-                description="Customize the app's look and feel"
-                onClick={() => {
-                  toast({
-                    title: "Coming Soon",
-                    description: "Theme customization will be available soon!",
-                  });
-                }}
-              />
-
-              <SettingOption
-                icon={<Volume2 className="w-5 h-5" />}
-                label="Sound & Haptics"
-                description="Control app sounds and vibrations"
-                onClick={() => {
-                  toast({
-                    title: "Coming Soon",
-                    description: "Sound settings will be available soon!",
-                  });
-                }}
+                description="Switch between light and dark mode"
+                onClick={toggleTheme}
+                rightElement={
+                  <div className="text-sm text-muted-foreground">
+                    {theme === 'light' ? '☀️ Light' : '🌙 Dark'}
+                  </div>
+                }
               />
             </div>
 
