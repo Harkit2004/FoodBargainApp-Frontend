@@ -5,6 +5,15 @@ import { BottomNavigation } from '@/components/BottomNavigation';
 import { RatingDialog } from '@/components/RatingDialog';
 import { RatingsView } from '@/components/RatingsView';
 import { StarRating } from '@/components/ui/star-rating';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { 
   Heart,
   MapPin, 
@@ -15,7 +24,8 @@ import {
   DollarSign,
   Loader2,
   Star,
-  MessageSquare
+  MessageSquare,
+  Flag
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
@@ -23,6 +33,7 @@ import { useAuth as useClerkAuth } from '@clerk/clerk-react';
 import { dealsService, Deal } from '@/services/dealsService';
 import { partnerService } from '@/services/partnerService';
 import { ratingService, MyRating } from '@/services/ratingService';
+import { dealReportService } from '@/services/dealReportService';
 import { formatDateLong } from '@/utils/dateUtils';
 import heroImage from '@/assets/hero-food.jpg';
 
@@ -39,6 +50,10 @@ export const DealDetail: React.FC = () => {
   const [ratingsViewOpen, setRatingsViewOpen] = useState(false);
   const [userRating, setUserRating] = useState<MyRating | null>(null);
   const [ratingStats, setRatingStats] = useState<{ averageRating: number; totalCount: number } | null>(null);
+  const [reportDialogOpen, setReportDialogOpen] = useState(false);
+  const [reportReason, setReportReason] = useState('');
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
+  const [hasReported, setHasReported] = useState(false);
 
   useEffect(() => {
     const fetchDeal = async () => {
@@ -127,6 +142,27 @@ export const DealDetail: React.FC = () => {
     };
 
     loadRatingsData();
+  }, [dealId, getToken]);
+
+  // Check if user has already reported this deal
+  useEffect(() => {
+    const checkReportStatus = async () => {
+      if (!dealId) return;
+
+      try {
+        const token = await getToken();
+        const dealIdNum = parseInt(dealId);
+
+        const response = await dealReportService.checkReportStatus(dealIdNum, token || undefined);
+        if (response.success && response.data) {
+          setHasReported(response.data.hasReported);
+        }
+      } catch (error) {
+        console.error('Error checking report status:', error);
+      }
+    };
+
+    checkReportStatus();
   }, [dealId, getToken]);
 
   const handleRatingSubmitted = async () => {
@@ -219,6 +255,55 @@ export const DealDetail: React.FC = () => {
       if ((error as Error).name !== 'AbortError') {
         console.error('Error sharing:', error);
       }
+    }
+  };
+
+  const handleReportDeal = async () => {
+    if (!dealId || !reportReason.trim()) {
+      toast({
+        title: "Error",
+        description: "Please provide a reason for the report",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSubmittingReport(true);
+
+    try {
+      const token = await getToken();
+      const response = await dealReportService.reportDeal(
+        {
+          dealId: parseInt(dealId),
+          reason: reportReason.trim(),
+        },
+        token || undefined
+      );
+
+      if (response.success && response.data) {
+        setHasReported(true);
+        setReportDialogOpen(false);
+        setReportReason('');
+        toast({
+          title: "Report Submitted",
+          description: response.data.message || "Thank you for helping us maintain quality",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: response.error || "Failed to submit report. Please try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Error submitting report:', error);
+      toast({
+        title: "Error",
+        description: "Failed to submit report. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmittingReport(false);
     }
   };
 
@@ -480,6 +565,17 @@ export const DealDetail: React.FC = () => {
                   <ExternalLink className="w-4 h-4 mr-1" />
                   View Restaurant Menu
                 </Button>
+
+                {/* Report Deal Button */}
+                <Button 
+                  variant="outline" 
+                  className="w-full"
+                  onClick={() => setReportDialogOpen(true)}
+                  disabled={hasReported}
+                >
+                  <Flag className="w-4 h-4 mr-1" />
+                  {hasReported ? 'Already Reported' : 'Report Deal'}
+                </Button>
               </div>
             </div>
           </div>
@@ -508,6 +604,63 @@ export const DealDetail: React.FC = () => {
           targetId={deal.id}
           targetName={deal.title}
         />
+
+        {/* Report Dialog */}
+        <Dialog open={reportDialogOpen} onOpenChange={setReportDialogOpen}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Report Deal</DialogTitle>
+              <DialogDescription>
+                Help us maintain quality by reporting duplicate or low-quality deals. 
+                Your report will be reviewed by our support team.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <label htmlFor="reason" className="text-sm font-medium">
+                  Reason for Report *
+                </label>
+                <Textarea
+                  id="reason"
+                  placeholder="Please describe why you're reporting this deal (e.g., duplicate listing, incorrect information, expired deal, etc.)"
+                  value={reportReason}
+                  onChange={(e) => setReportReason(e.target.value)}
+                  rows={5}
+                  maxLength={1000}
+                  className="resize-none"
+                />
+                <p className="text-xs text-muted-foreground text-right">
+                  {reportReason.length}/1000 characters
+                </p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setReportDialogOpen(false);
+                  setReportReason('');
+                }}
+                disabled={isSubmittingReport}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleReportDeal}
+                disabled={isSubmittingReport || !reportReason.trim()}
+              >
+                {isSubmittingReport ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Submitting...
+                  </>
+                ) : (
+                  'Submit Report'
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
