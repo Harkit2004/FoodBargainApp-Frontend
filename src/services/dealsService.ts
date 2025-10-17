@@ -22,6 +22,8 @@ export interface Deal {
     province?: string;
     latitude?: number;
     longitude?: number;
+    ratingAvg?: number;
+    ratingCount?: number;
   };
   partner: {
     id: number;

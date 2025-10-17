@@ -13,6 +13,7 @@ export interface FilterOptions {
   cuisines: number[]; // array of cuisine IDs
   dietaryPreferences: number[]; // array of dietary preference IDs
   showType: 'all' | 'restaurants' | 'deals'; // what to show
+  sortBy: 'relevance' | 'rating'; // how to sort results
 }
 
 interface FilterSheetProps {
@@ -90,6 +91,12 @@ export default function FilterSheet({ filters, onFiltersChange, onApply }: Filte
     setLocalFilters({ ...localFilters, showType });
   };
 
+  const handleSortByChange = (value: string) => {
+    const sortBy = value as 'relevance' | 'rating';
+    console.log('Sort by changed to:', sortBy);
+    setLocalFilters({ ...localFilters, sortBy });
+  };
+
   const handleClearAll = () => {
     console.log('Clearing all filters');
     const clearedFilters: FilterOptions = {
@@ -97,6 +104,7 @@ export default function FilterSheet({ filters, onFiltersChange, onApply }: Filte
       cuisines: [],
       dietaryPreferences: [],
       showType: 'all',
+      sortBy: 'relevance',
     };
     setLocalFilters(clearedFilters);
   };
@@ -112,7 +120,8 @@ export default function FilterSheet({ filters, onFiltersChange, onApply }: Filte
     (localFilters.distance !== null ? 1 : 0) +
     (localFilters.cuisines.length > 0 ? 1 : 0) +
     (localFilters.dietaryPreferences.length > 0 ? 1 : 0) +
-    (localFilters.showType !== 'all' ? 1 : 0);
+    (localFilters.showType !== 'all' ? 1 : 0) +
+    (localFilters.sortBy !== 'relevance' ? 1 : 0);
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -164,6 +173,30 @@ export default function FilterSheet({ filters, onFiltersChange, onApply }: Filte
                 </div>
               </RadioGroup>
             </div>
+
+            {/* Sort By Filter - Only show when specific type is selected */}
+            {(localFilters.showType === 'restaurants' || localFilters.showType === 'deals') && (
+              <div className="space-y-3">
+                <Label className="text-base font-semibold">Sort By</Label>
+                <RadioGroup
+                  value={localFilters.sortBy}
+                  onValueChange={handleSortByChange}
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="relevance" id="sort-relevance" />
+                    <Label htmlFor="sort-relevance" className="cursor-pointer font-normal">
+                      Relevance (Newest First)
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="rating" id="sort-rating" />
+                    <Label htmlFor="sort-rating" className="cursor-pointer font-normal">
+                      Highest Rating
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </div>
+            )}
 
             {/* Distance Filter */}
             <div className="space-y-3">

@@ -59,6 +59,7 @@ export const Search: React.FC = () => {
     cuisines: [],
     dietaryPreferences: [],
     showType: 'all',
+    sortBy: 'relevance',
   });
   const [cuisineNames, setCuisineNames] = useState<Map<number, string>>(new Map());
   const [dietaryNames, setDietaryNames] = useState<Map<number, string>>(new Map());
@@ -144,6 +145,8 @@ export const Search: React.FC = () => {
         radius?: number;
         cuisine?: string;
         dietaryPreference?: string;
+        sortBy?: string;
+        sortOrder?: string;
       } = { limit: 20 };
       
       // Add query only if provided
@@ -177,6 +180,16 @@ export const Search: React.FC = () => {
           searchParams.dietaryPreference = firstDietary;
           console.log('Dietary filter applied:', firstDietary);
         }
+      }
+
+      // Add sorting parameters
+      if (currentFilters.sortBy === 'rating') {
+        searchParams.sortBy = 'ratingAvg';
+        searchParams.sortOrder = 'desc';
+        console.log('Sort by rating (highest first) applied');
+      } else {
+        searchParams.sortBy = 'relevance';
+        console.log('Sort by relevance (newest first) applied');
       }
       
       console.log('API call params:', searchParams);
@@ -297,7 +310,7 @@ export const Search: React.FC = () => {
               title: deal.title,
               subtitle: deal.restaurant.name,
               description: deal.description || 'Great deal available!',
-              rating: undefined, // Rating not available in deal data
+              rating: deal.restaurant.ratingAvg ? parseFloat(deal.restaurant.ratingAvg.toString()) : undefined,
               distance: distance,
               price: 'Deal',
               imageUrl: heroImage,
@@ -396,10 +409,26 @@ export const Search: React.FC = () => {
         console.log('After showType filter:', beforeCount, '->', filteredResults.length);
       }
 
+      // Apply sorting
+      if (currentFilters.sortBy === 'rating') {
+        console.log('Applying rating sort (highest first)');
+        filteredResults.sort((a, b) => {
+          // Get ratings - deals use restaurant rating, restaurants use own rating
+          const ratingA = a.rating || 0;
+          const ratingB = b.rating || 0;
+          
+          // Sort descending (highest rating first)
+          return ratingB - ratingA;
+        });
+      }
+
       console.log('=== FINAL RESULTS ===');
       console.log('Total results:', filteredResults.length);
       console.log('Restaurants:', filteredResults.filter(r => r.type === 'restaurant').length);
       console.log('Deals:', filteredResults.filter(r => r.type === 'deal').length);
+      if (currentFilters.sortBy === 'rating') {
+        console.log('Sorted by rating. Top 5 ratings:', filteredResults.slice(0, 5).map(r => ({ title: r.title, rating: r.rating })));
+      }
       
       setSearchResults(filteredResults);
     } catch (error) {
