@@ -5,56 +5,100 @@ import { BottomNavigation } from '@/components/BottomNavigation';
 import { Bell, Clock, CheckCircle, AlertCircle, Gift, Utensils } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
+import { notificationService } from '@/services/notificationService';
+import { useAuth as useClerkAuth } from '@clerk/clerk-react';
 
 interface Notification {
   id: number;
-  type: 'deal' | 'restaurant' | 'system' | 'favorite';
+  type: string;
   title: string;
   message: string;
   isRead: boolean;
   createdAt: string;
-  actionUrl?: string;
+  dealId?: number;
 }
 
 export const NotificationsList: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { getToken } = useClerkAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
+  const [loading, setLoading] = useState(true);
+  const [page] = useState(1);
+
+  const fetchNotifications = async () => {
+    try {
+      setLoading(true);
+      const token = await getToken();
+      const response = await notificationService.getNotifications(
+        page,
+        20,
+        filter === 'unread',
+        token || undefined
+      );
+      setNotifications(response.notifications);
+    } catch (error) {
+      console.error('Failed to fetch notifications:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load notifications",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    // TODO: Fetch real notifications from API when backend is ready
-    // For now, start with empty notifications array
-    setNotifications([]);
-  }, []);
+    fetchNotifications();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter, page]);
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
   const filteredNotifications = filter === 'unread' 
     ? notifications.filter(n => !n.isRead)
     : notifications;
 
-  const markAsRead = (id: number) => {
-    setNotifications(prev => 
-      prev.map(n => n.id === id ? { ...n, isRead: true } : n)
-    );
+  const markAsRead = async (id: number) => {
+    try {
+      const token = await getToken();
+      await notificationService.markAsRead(id, token || undefined);
+      setNotifications(prev => 
+        prev.map(n => n.id === id ? { ...n, isRead: true } : n)
+      );
+    } catch (error) {
+      console.error('Failed to mark notification as read:', error);
+    }
   };
 
-  const markAllAsRead = () => {
-    setNotifications(prev => 
-      prev.map(n => ({ ...n, isRead: true }))
-    );
-    toast({
-      title: "All notifications marked as read",
-      description: `${unreadCount} notifications marked as read`,
-    });
+  const markAllAsRead = async () => {
+    try {
+      const token = await getToken();
+      await notificationService.markAllAsRead(token || undefined);
+      setNotifications(prev => 
+        prev.map(n => ({ ...n, isRead: true }))
+      );
+      toast({
+        title: "All notifications marked as read",
+        description: `${unreadCount} notifications marked as read`,
+      });
+    } catch (error) {
+      console.error('Failed to mark all as read:', error);
+      toast({
+        title: "Error",
+        description: "Failed to mark notifications as read",
+        variant: "destructive",
+      });
+    }
   };
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
-      case 'deal':
+      case 'deal_expiring':
+      case 'new_deal':
         return <Gift className="w-5 h-5 text-green-500" />;
-      case 'restaurant':
-      case 'favorite':
+      case 'favorite_restaurant':
         return <Utensils className="w-5 h-5 text-blue-500" />;
       case 'system':
         return <Bell className="w-5 h-5 text-purple-500" />;
@@ -88,8 +132,9 @@ export const NotificationsList: React.FC = () => {
         if (!notification.isRead) {
           markAsRead(notification.id);
         }
-        if (notification.actionUrl) {
-          navigate(notification.actionUrl);
+        // Navigate to deal detail if dealId is present
+        if (notification.dealId) {
+          navigate(`/deals/${notification.dealId}`);
         }
       }}
     >
@@ -118,9 +163,9 @@ export const NotificationsList: React.FC = () => {
             {notification.message}
           </p>
           
-          {notification.actionUrl && (
+          {notification.dealId && (
             <div className="mt-2">
-              <span className="text-xs text-primary font-medium">Tap to view →</span>
+              <span className="text-xs text-primary font-medium">Tap to view deal →</span>
             </div>
           )}
         </div>
@@ -177,7 +222,11 @@ export const NotificationsList: React.FC = () => {
             </div>
 
             {/* Notifications List */}
-            {filteredNotifications.length > 0 ? (
+            {loading ? (
+              <div className="text-center py-12">
+                <p className="text-muted-foreground">Loading notifications...</p>
+              </div>
+            ) : filteredNotifications.length > 0 ? (
               <div>
                 {filteredNotifications.map((notification) => (
                   <NotificationCard key={notification.id} notification={notification} />

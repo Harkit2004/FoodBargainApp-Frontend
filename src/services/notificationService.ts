@@ -7,14 +7,13 @@ interface NotificationPreferences {
 }
 
 interface Notification {
-  id: string;
-  type: 'new_deal' | 'favorite_restaurant' | 'system';
+  id: number;
+  type: string;
   title: string;
   message: string;
-  description?: string;
+  isRead: boolean;
   createdAt: string;
-  isRead?: boolean;
-  data?: { dealId?: number; restaurantName?: string; [key: string]: unknown };
+  dealId?: number;
 }
 
 interface BookmarkedRestaurant {
@@ -42,8 +41,8 @@ interface BookmarkedRestaurant {
 
 export const notificationService = {
   // Get user's notification preferences
-  async getPreferences(): Promise<NotificationPreferences> {
-    const response = await apiService.get<NotificationPreferences>('/notifications/preferences');
+  async getPreferences(token?: string): Promise<NotificationPreferences> {
+    const response = await apiService.get<NotificationPreferences>('/notifications/preferences', token);
     if (!response.success) {
       throw new Error(response.error || 'Failed to fetch notification preferences');
     }
@@ -51,83 +50,78 @@ export const notificationService = {
   },
 
   // Update user's notification preferences
-  async updatePreferences(preferences: { emailNotifications: boolean }): Promise<NotificationPreferences> {
-    const response = await apiService.put<NotificationPreferences>('/notifications/preferences', preferences);
+  async updatePreferences(preferences: { emailNotifications: boolean }, token?: string): Promise<NotificationPreferences> {
+    const response = await apiService.put<NotificationPreferences>('/notifications/preferences', preferences, token);
     if (!response.success) {
       throw new Error(response.error || 'Failed to update notification preferences');
     }
     return response.data!;
   },
 
-  // Get user's notifications (mock implementation for now)
-  async getNotifications(): Promise<Notification[]> {
-    // For now, return mock notifications
-    // In a real implementation, this would fetch from the backend
-    const mockNotifications: Notification[] = [
-      {
-        id: '1',
-        type: 'new_deal',
-        title: 'New Deal Available!',
-        message: '50% off all pizzas at Mario\'s Italian Bistro',
-        description: 'Limited time offer - expires in 3 days',
-        createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
-        isRead: false,
-        data: { dealId: 1, restaurantName: 'Mario\'s Italian Bistro' }
-      },
-      {
-        id: '2',
-        type: 'new_deal',
-        title: 'Sushi Happy Hour!',
-        message: '30% off sushi rolls at Sakura Sushi House',
-        description: 'Daily from 5-7 PM',
-        createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // 1 day ago
-        isRead: false,
-        data: { dealId: 2, restaurantName: 'Sakura Sushi House' }
-      },
-      {
-        id: '3',
-        type: 'system',
-        title: 'Welcome to FoodBargain!',
-        message: 'Start exploring amazing food deals near you',
-        description: 'Bookmark your favorite restaurants to get notified of new deals',
-        createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(), // 1 week ago
-        isRead: true,
-      }
-    ];
+  // Get user's notifications (fetch from backend)
+  async getNotifications(page: number = 1, limit: number = 20, unreadOnly: boolean = false, token?: string): Promise<{
+    notifications: Notification[];
+    pagination: {
+      currentPage: number;
+      totalPages: number;
+      totalCount: number;
+      hasNextPage: boolean;
+      hasPreviousPage: boolean;
+    };
+  }> {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      limit: limit.toString(),
+      ...(unreadOnly && { unreadOnly: 'true' }),
+    });
 
-    return mockNotifications;
+    const response = await apiService.get<{
+      notifications: Notification[];
+      pagination: {
+        currentPage: number;
+        totalPages: number;
+        totalCount: number;
+        hasNextPage: boolean;
+        hasPreviousPage: boolean;
+      };
+    }>(`/notifications?${params}`, token);
+    
+    if (!response.success) {
+      throw new Error(response.error || 'Failed to fetch notifications');
+    }
+    return response.data!;
   },
 
   // Bookmark a restaurant
-  async bookmarkRestaurant(restaurantId: number, notifyOnDeal: boolean = true): Promise<void> {
+  async bookmarkRestaurant(restaurantId: number, notifyOnDeal: boolean = true, token?: string): Promise<void> {
     const response = await apiService.post(`/notifications/restaurants/${restaurantId}/bookmark`, {
       notifyOnDeal
-    });
+    }, token);
     if (!response.success) {
       throw new Error(response.error || 'Failed to bookmark restaurant');
     }
   },
 
   // Remove restaurant bookmark
-  async removeBookmark(restaurantId: number): Promise<void> {
-    const response = await apiService.delete(`/notifications/restaurants/${restaurantId}/bookmark`);
+  async removeBookmark(restaurantId: number, token?: string): Promise<void> {
+    const response = await apiService.delete(`/notifications/restaurants/${restaurantId}/bookmark`, token);
     if (!response.success) {
       throw new Error(response.error || 'Failed to remove bookmark');
     }
   },
 
   // Update notification preference for a bookmarked restaurant
-  async updateRestaurantNotification(restaurantId: number, notifyOnDeal: boolean): Promise<void> {
+  async updateRestaurantNotification(restaurantId: number, notifyOnDeal: boolean, token?: string): Promise<void> {
     const response = await apiService.patch(`/notifications/restaurants/${restaurantId}/bookmark`, {
       notifyOnDeal
-    });
+    }, token);
     if (!response.success) {
       throw new Error(response.error || 'Failed to update restaurant notification preference');
     }
   },
 
   // Get bookmarked restaurants
-  async getBookmarkedRestaurants(page: number = 1, limit: number = 20): Promise<{
+  async getBookmarkedRestaurants(page: number = 1, limit: number = 20, token?: string): Promise<{
     restaurants: BookmarkedRestaurant[];
     pagination: {
       currentPage: number;
@@ -146,22 +140,35 @@ export const notificationService = {
         hasNextPage: boolean;
         hasPreviousPage: boolean;
       };
-    }>(`/notifications/bookmarked-restaurants?page=${page}&limit=${limit}`);
+    }>(`/notifications/bookmarked-restaurants?page=${page}&limit=${limit}`, token);
     if (!response.success) {
       throw new Error(response.error || 'Failed to fetch bookmarked restaurants');
     }
     return response.data!;
   },
 
-  // Mark notifications as read (mock implementation)
-  async markAsRead(notificationIds: string[]): Promise<void> {
-    // Mock implementation - in a real app, this would update the backend
-    console.log('Marking notifications as read:', notificationIds);
+  // Mark notifications as read
+  async markAsRead(notificationId: number, token?: string): Promise<void> {
+    const response = await apiService.patch(`/notifications/${notificationId}/read`, undefined, token);
+    if (!response.success) {
+      throw new Error(response.error || 'Failed to mark notification as read');
+    }
+  },
+
+  // Mark all notifications as read
+  async markAllAsRead(token?: string): Promise<void> {
+    const response = await apiService.patch('/notifications/mark-all-read', undefined, token);
+    if (!response.success) {
+      throw new Error(response.error || 'Failed to mark all notifications as read');
+    }
   },
 
   // Get unread notification count
-  async getUnreadCount(): Promise<number> {
-    const notifications = await this.getNotifications();
-    return notifications.filter(n => !n.isRead).length;
+  async getUnreadCount(token?: string): Promise<number> {
+    const response = await apiService.get<{ count: number }>('/notifications/unread-count', token);
+    if (!response.success) {
+      throw new Error(response.error || 'Failed to fetch unread count');
+    }
+    return response.data!.count;
   }
 };
