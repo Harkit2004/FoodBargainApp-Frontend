@@ -41,6 +41,8 @@ interface SearchResult {
   imageUrl: string;
   isBookmarked: boolean;
   tags: string[];
+  cuisines?: Array<{ id: number; name: string }>;
+  dietaryPreferences?: Array<{ id: number; name: string }>;
   originalData: Restaurant | Deal;
 }
 
@@ -316,6 +318,8 @@ export const Search: React.FC = () => {
               imageUrl: heroImage,
               isBookmarked: deal.isBookmarked || false,
               tags: ['Deal', locationTag],
+              cuisines: deal.cuisines,
+              dietaryPreferences: deal.dietaryPreferences,
               originalData: deal
             });
           }
@@ -608,6 +612,28 @@ export const Search: React.FC = () => {
             )}
           </div>
         </div>
+        
+        {/* Cuisine and Dietary Tags */}
+        {result.type === 'deal' && ((result.cuisines && result.cuisines.length > 0) || (result.dietaryPreferences && result.dietaryPreferences.length > 0)) && (
+          <div className="flex flex-wrap gap-1.5 mb-3">
+            {result.cuisines?.map((cuisine) => (
+              <span
+                key={`cuisine-${cuisine.id}`}
+                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-500/20 text-purple-300 border border-purple-500/30"
+              >
+                {cuisine.name}
+              </span>
+            ))}
+            {result.dietaryPreferences?.map((dietary) => (
+              <span
+                key={`dietary-${dietary.id}`}
+                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-500/20 text-green-300 border border-green-500/30"
+              >
+                {dietary.name}
+              </span>
+            ))}
+          </div>
+        )}
         
         <div className="flex flex-wrap gap-1 mb-3">
           {result.tags.map((tag, index) => (

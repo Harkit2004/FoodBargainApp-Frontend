@@ -297,6 +297,28 @@ export const Home: React.FC = () => {
         <h3 className="font-bold text-lg mb-2 text-white">{deal.title}</h3>
         <p className="text-gray-300 text-sm mb-3">{deal.description || 'Great deal available!'}</p>
         
+        {/* Cuisine and Dietary Tags */}
+        {((deal.cuisines && deal.cuisines.length > 0) || (deal.dietaryPreferences && deal.dietaryPreferences.length > 0)) && (
+          <div className="flex flex-wrap gap-1.5 mb-3">
+            {deal.cuisines?.map((cuisine) => (
+              <span
+                key={`cuisine-${cuisine.id}`}
+                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-500/20 text-purple-300 border border-purple-500/30"
+              >
+                {cuisine.name}
+              </span>
+            ))}
+            {deal.dietaryPreferences?.map((dietary) => (
+              <span
+                key={`dietary-${dietary.id}`}
+                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-500/20 text-green-300 border border-green-500/30"
+              >
+                {dietary.name}
+              </span>
+            ))}
+          </div>
+        )}
+        
         <div className="flex items-center justify-between mb-3">
           <div>
             <p className="font-semibold text-white">{deal.restaurant.name}</p>

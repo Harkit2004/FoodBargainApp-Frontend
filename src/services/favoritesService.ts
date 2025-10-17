@@ -42,6 +42,8 @@ export interface FavoriteDeal {
     id: number;
     businessName: string;
   };
+  cuisines?: Array<{ id: number; name: string }>;
+  dietaryPreferences?: Array<{ id: number; name: string }>;
   bookmarkedAt?: string;
   createdAt: string;
 }
@@ -56,6 +58,8 @@ export interface FavoriteItem {
   distance?: string;
   imageUrl: string;
   location?: string;
+  cuisines?: Array<{ id: number; name: string }>;
+  dietaryPreferences?: Array<{ id: number; name: string }>;
 }
 
 class FavoritesService {
@@ -171,7 +175,9 @@ class FavoritesService {
             description: deal.description || 'Deal description',
             distance: '2.5 km', // Mock distance for now
             imageUrl: '/placeholder.svg', // Using placeholder for now
-            location: `${deal.restaurant.city || 'Unknown'}, ${deal.restaurant.province || 'Unknown'}`
+            location: `${deal.restaurant.city || 'Unknown'}, ${deal.restaurant.province || 'Unknown'}`,
+            cuisines: deal.cuisines,
+            dietaryPreferences: deal.dietaryPreferences
           });
         });
       }

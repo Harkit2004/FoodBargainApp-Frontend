@@ -159,6 +159,28 @@ export const Favorites: React.FC = () => {
         
         <p className="text-sm text-muted-foreground mb-3">{item.description}</p>
         
+        {/* Cuisine and Dietary Tags */}
+        {item.type === 'deal' && ((item.cuisines && item.cuisines.length > 0) || (item.dietaryPreferences && item.dietaryPreferences.length > 0)) && (
+          <div className="flex flex-wrap gap-1.5 mb-3">
+            {item.cuisines?.map((cuisine) => (
+              <span
+                key={`cuisine-${cuisine.id}`}
+                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-500/20 text-purple-300 border border-purple-500/30"
+              >
+                {cuisine.name}
+              </span>
+            ))}
+            {item.dietaryPreferences?.map((dietary) => (
+              <span
+                key={`dietary-${dietary.id}`}
+                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-500/20 text-green-300 border border-green-500/30"
+              >
+                {dietary.name}
+              </span>
+            ))}
+          </div>
+        )}
+        
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             {item.rating && (

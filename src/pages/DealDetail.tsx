@@ -319,6 +319,31 @@ export const DealDetail: React.FC = () => {
                 <p className="text-muted-foreground leading-relaxed">{deal.description}</p>
               </div>
 
+              {/* Cuisine and Dietary Tags */}
+              {((deal.cuisines && deal.cuisines.length > 0) || (deal.dietaryPreferences && deal.dietaryPreferences.length > 0)) && (
+                <div className="mb-6">
+                  <h3 className="font-semibold mb-3">Tags</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {deal.cuisines?.map((cuisine) => (
+                      <span
+                        key={`cuisine-${cuisine.id}`}
+                        className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-purple-500/20 text-purple-300 border border-purple-500/30"
+                      >
+                        {cuisine.name}
+                      </span>
+                    ))}
+                    {deal.dietaryPreferences?.map((dietary) => (
+                      <span
+                        key={`dietary-${dietary.id}`}
+                        className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-green-500/20 text-green-300 border border-green-500/30"
+                      >
+                        {dietary.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Restaurant Info */}
               <div className="bg-card rounded-xl p-4 shadow-custom-sm mb-6">
                 <div className="flex items-center justify-between mb-3">
