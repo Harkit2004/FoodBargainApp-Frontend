@@ -98,6 +98,9 @@ class RestaurantService {
     query?: string;
     location?: string;
     cuisine?: string;
+    dietaryPreference?: string;
+    latitude?: number;
+    longitude?: number;
     radius?: number;
     page?: number;
     limit?: number;
@@ -106,6 +109,9 @@ class RestaurantService {
     if (params.query) queryParams.append('query', params.query);
     if (params.location) queryParams.append('location', params.location);
     if (params.cuisine) queryParams.append('cuisine', params.cuisine);
+    if (params.dietaryPreference) queryParams.append('dietaryPreference', params.dietaryPreference);
+    if (params.latitude !== undefined) queryParams.append('latitude', params.latitude.toString());
+    if (params.longitude !== undefined) queryParams.append('longitude', params.longitude.toString());
     if (params.radius) queryParams.append('radius', params.radius.toString());
     if (params.page) queryParams.append('page', params.page.toString());
     if (params.limit) queryParams.append('limit', params.limit.toString());

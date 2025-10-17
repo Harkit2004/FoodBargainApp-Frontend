@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { MobileLayout } from '@/components/MobileLayout';
 import { BottomNavigation } from '@/components/BottomNavigation';
-import { Search, MapPin, Bell, Filter, Heart, Star, ArrowRight, Shield, Clock, Share2 } from 'lucide-react';
+import { Search, MapPin, Bell, Heart, Star, ArrowRight, Shield, Clock, Share2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAuth as useClerkAuth } from '@clerk/clerk-react';
@@ -413,11 +413,8 @@ export const Home: React.FC = () => {
           <div className="px-6 pt-4 pb-20">
             {/* Cuisine Filter */}
             <div className="mb-6">
-              <div className="flex items-center justify-between mb-3">
+              <div className="mb-3">
                 <h2 className="text-lg font-semibold text-white">Cuisines</h2>
-                <button className="p-2 hover:bg-gray-700 rounded-lg transition-colors">
-                  <Filter className="w-4 h-4 text-gray-300" />
-                </button>
               </div>
               <div className="flex gap-2 overflow-x-auto pb-2">
                 {cuisineTypes.map((cuisine) => (

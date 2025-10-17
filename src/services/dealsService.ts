@@ -20,11 +20,15 @@ export interface Deal {
     streetAddress?: string;
     city?: string;
     province?: string;
+    latitude?: number;
+    longitude?: number;
   };
   partner: {
     id: number;
     businessName: string;
   };
+  cuisines?: Array<{ id: number; name: string }>;
+  dietaryPreferences?: Array<{ id: number; name: string }>;
   isBookmarked?: boolean;
   createdAt: string;
 }

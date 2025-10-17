@@ -3,12 +3,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { MobileLayout } from '@/components/MobileLayout';
 import { BottomNavigation } from '@/components/BottomNavigation';
+import FilterSheet, { FilterOptions } from '@/components/FilterSheet';
 import { 
   Search as SearchIcon, 
-  MapPin, 
-  Filter, 
+  MapPin,
   Star, 
-  Clock, 
   Heart,
   Utensils,
   DollarSign
@@ -18,6 +17,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@clerk/clerk-react';
 import { restaurantService, Restaurant } from '@/services/restaurantService';
 import { dealsService, Deal } from '@/services/dealsService';
+import { preferencesService } from '@/services/preferencesService';
 import { 
   getCurrentLocation, 
   calculateDistance, 
@@ -44,11 +44,6 @@ interface SearchResult {
   originalData: Restaurant | Deal;
 }
 
-const popularSearches = [
-  "Pizza", "Sushi", "Vegetarian", "Burgers", 
-  "Breakfast", "Coffee", "Italian", "Chinese"
-];
-
 export const Search: React.FC = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -59,6 +54,14 @@ export const Search: React.FC = () => {
   const [userLocation, setUserLocation] = useState<Coordinates | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [filters, setFilters] = useState<FilterOptions>({
+    distance: null,
+    cuisines: [],
+    dietaryPreferences: [],
+    showType: 'all',
+  });
+  const [cuisineNames, setCuisineNames] = useState<Map<number, string>>(new Map());
+  const [dietaryNames, setDietaryNames] = useState<Map<number, string>>(new Map());
 
   // Request user's location on component mount
   useEffect(() => {
@@ -76,6 +79,22 @@ export const Search: React.FC = () => {
     };
 
     requestLocation();
+  }, []);
+
+  // Load preference names for mapping IDs to names
+  useEffect(() => {
+    const loadPreferences = async () => {
+      try {
+        const prefs = await preferencesService.getAllPreferences();
+        const cuisineMap = new Map(prefs.cuisines.map(c => [c.id, c.name]));
+        const dietaryMap = new Map(prefs.dietaryPreferences.map(d => [d.id, d.name]));
+        setCuisineNames(cuisineMap);
+        setDietaryNames(dietaryMap);
+      } catch (error) {
+        console.error('Failed to load preferences:', error);
+      }
+    };
+    loadPreferences();
   }, []);
 
   // Listen for bookmark changes from other pages
@@ -106,36 +125,81 @@ export const Search: React.FC = () => {
     };
   }, []);
 
-  const performSearch = useCallback(async (query: string) => {
-    console.log('Search triggered with query:', query);
-    if (!query.trim()) {
-      setSearchResults([]);
-      setIsSearching(false);
-      return;
-    }
-
+  const performSearch = useCallback(async (query: string = '', currentFilters: FilterOptions = filters) => {
+    console.log('=== SEARCH STARTED ===');
+    console.log('Search query:', query);
+    console.log('Current filters:', currentFilters);
+    console.log('User location:', userLocation);
+    
     setIsSearching(true);
     try {
-      console.log('Making API calls...');
       const token = await getToken();
+      
+      // Build search parameters with filters
+      const searchParams: {
+        query?: string;
+        limit: number;
+        latitude?: number;
+        longitude?: number;
+        radius?: number;
+        cuisine?: string;
+        dietaryPreference?: string;
+      } = { limit: 20 };
+      
+      // Add query only if provided
+      if (query.trim()) {
+        searchParams.query = query;
+      }
+      
+      // Add location and radius ONLY if distance filter is selected
+      if (userLocation && currentFilters.distance !== null) {
+        searchParams.latitude = userLocation.latitude;
+        searchParams.longitude = userLocation.longitude;
+        searchParams.radius = currentFilters.distance;
+        console.log('Distance filter applied:', currentFilters.distance, 'km');
+      } else {
+        console.log('No distance filter applied');
+      }
+      
+      // Add cuisine filter (send first selected cuisine name)
+      if (currentFilters.cuisines.length > 0) {
+        const firstCuisine = cuisineNames.get(currentFilters.cuisines[0]);
+        if (firstCuisine) {
+          searchParams.cuisine = firstCuisine;
+          console.log('Cuisine filter applied:', firstCuisine);
+        }
+      }
+      
+      // Add dietary preference filter (send first selected dietary preference name)
+      if (currentFilters.dietaryPreferences.length > 0) {
+        const firstDietary = dietaryNames.get(currentFilters.dietaryPreferences[0]);
+        if (firstDietary) {
+          searchParams.dietaryPreference = firstDietary;
+          console.log('Dietary filter applied:', firstDietary);
+        }
+      }
+      
+      console.log('API call params:', searchParams);
+      
+      // Always fetch both restaurants and deals
+      // We'll filter deals on the frontend since backend doesn't support deal filtering yet
       const [restaurantResponse, dealResponse] = await Promise.all([
-        restaurantService.searchRestaurants({ query, limit: 10 }, token || undefined),
-        dealsService.getDeals({ status: 'active', limit: 10 }, token || undefined)
+        restaurantService.searchRestaurants(searchParams, token || undefined),
+        dealsService.getDeals({ status: 'active', limit: 100 }, token || undefined)
       ]);
       
-      console.log('Restaurant response:', restaurantResponse);
-      console.log('Deal response:', dealResponse);
+      console.log('Restaurant API response:', restaurantResponse.success, 'Count:', restaurantResponse.data?.restaurants?.length || 0);
+      console.log('Deal API response:', dealResponse.success, 'Count:', dealResponse.data?.deals?.length || 0);
 
       const results: SearchResult[] = [];
       const addedIds = new Set<string>(); // Track added items to prevent duplicates
 
       // Add restaurant results
       if (restaurantResponse.success && restaurantResponse.data) {
+        console.log('Processing', restaurantResponse.data.restaurants.length, 'restaurants');
         restaurantResponse.data.restaurants.forEach((restaurant) => {
           const uniqueId = `restaurant-${restaurant.id}`;
-          if (!addedIds.has(uniqueId) && 
-              (restaurant.name.toLowerCase().includes(query.toLowerCase()) ||
-               restaurant.description?.toLowerCase().includes(query.toLowerCase()))) {
+          if (!addedIds.has(uniqueId)) {
             const city = restaurant.city?.trim();
             const province = restaurant.province?.trim();
             const streetAddress = restaurant.streetAddress?.trim();
@@ -185,14 +249,19 @@ export const Search: React.FC = () => {
         });
       }
 
-      // Add deal results  
+      // Add deal results
       if (dealResponse.success && dealResponse.data) {
+        console.log('Processing', dealResponse.data.deals.length, 'deals');
         dealResponse.data.deals.forEach((deal) => {
           const uniqueId = `deal-${deal.id}`;
-          if (!addedIds.has(uniqueId) &&
-              (deal.title.toLowerCase().includes(query.toLowerCase()) ||
-               deal.description?.toLowerCase().includes(query.toLowerCase()) ||
-               deal.restaurant.name.toLowerCase().includes(query.toLowerCase()))) {
+          
+          // If there's a query, filter deals by it; otherwise include all deals
+          const matchesQuery = !query.trim() || 
+            deal.title.toLowerCase().includes(query.toLowerCase()) ||
+            deal.description?.toLowerCase().includes(query.toLowerCase()) ||
+            deal.restaurant.name.toLowerCase().includes(query.toLowerCase());
+          
+          if (!addedIds.has(uniqueId) && matchesQuery) {
             
             const city = deal.restaurant.city?.trim();
             const province = deal.restaurant.province?.trim();
@@ -240,8 +309,99 @@ export const Search: React.FC = () => {
         });
       }
 
-      console.log('Final search results:', results);
-      setSearchResults(results);
+      console.log('Results before frontend filtering:', results.length);
+      
+      let filteredResults = results;
+      
+      // Filter deals by cuisine (restaurants already filtered by backend)
+      if (currentFilters.cuisines.length > 0) {
+        console.log('Applying cuisine filter to deals. Selected cuisines:', currentFilters.cuisines);
+        const beforeCount = filteredResults.length;
+        filteredResults = filteredResults.filter(result => {
+          if (result.type === 'deal') {
+            const deal = result.originalData as Deal;
+            // Check if the deal has any of the selected cuisines
+            if (deal.cuisines && deal.cuisines.length > 0) {
+              const dealCuisineIds = deal.cuisines.map(c => c.id);
+              const hasMatchingCuisine = currentFilters.cuisines.some(cuisineId => 
+                dealCuisineIds.includes(cuisineId)
+              );
+              console.log(`Deal "${deal.title}" cuisines: [${dealCuisineIds}] - ${hasMatchingCuisine ? 'INCLUDED' : 'EXCLUDED'}`);
+              return hasMatchingCuisine;
+            }
+            console.log(`Deal "${deal.title}" has no cuisines - EXCLUDED`);
+            return false; // Exclude deals without cuisine data when filter is active
+          }
+          return true; // Keep all restaurants (already filtered by backend)
+        });
+        console.log('After cuisine filter:', beforeCount, '->', filteredResults.length);
+      }
+      
+      // Filter deals by dietary preferences (restaurants already filtered by backend)
+      if (currentFilters.dietaryPreferences.length > 0) {
+        console.log('Applying dietary filter to deals. Selected dietary prefs:', currentFilters.dietaryPreferences);
+        const beforeCount = filteredResults.length;
+        filteredResults = filteredResults.filter(result => {
+          if (result.type === 'deal') {
+            const deal = result.originalData as Deal;
+            // Check if the deal has any of the selected dietary preferences
+            if (deal.dietaryPreferences && deal.dietaryPreferences.length > 0) {
+              const dealDietaryIds = deal.dietaryPreferences.map(d => d.id);
+              const hasMatchingDietary = currentFilters.dietaryPreferences.some(dietaryId => 
+                dealDietaryIds.includes(dietaryId)
+              );
+              console.log(`Deal "${deal.title}" dietary: [${dealDietaryIds}] - ${hasMatchingDietary ? 'INCLUDED' : 'EXCLUDED'}`);
+              return hasMatchingDietary;
+            }
+            console.log(`Deal "${deal.title}" has no dietary preferences - EXCLUDED`);
+            return false; // Exclude deals without dietary data when filter is active
+          }
+          return true; // Keep all restaurants (already filtered by backend)
+        });
+        console.log('After dietary filter:', beforeCount, '->', filteredResults.length);
+      }
+      
+      // Apply distance filter to deals based on restaurant location
+      if (currentFilters.distance !== null && userLocation) {
+        console.log('Applying distance filter to deals:', currentFilters.distance, 'km');
+        const beforeCount = filteredResults.length;
+        filteredResults = filteredResults.filter(result => {
+          if (result.type === 'deal') {
+            const deal = result.originalData as Deal;
+            if (deal.restaurant) {
+              const restaurantCoords = getLocationCoordinates(deal.restaurant);
+              if (restaurantCoords) {
+                const distanceKm = calculateDistance(userLocation, restaurantCoords);
+                const isWithinDistance = distanceKm <= currentFilters.distance!;
+                console.log(`Deal "${deal.title}" at ${distanceKm.toFixed(2)}km - ${isWithinDistance ? 'INCLUDED' : 'EXCLUDED'}`);
+                return isWithinDistance;
+              }
+            }
+            return true;
+          }
+          return true; // Restaurants already filtered by backend
+        });
+        console.log('After distance filter:', beforeCount, '->', filteredResults.length);
+      }
+      
+      // Filter by show type
+      if (currentFilters.showType !== 'all') {
+        console.log('Applying showType filter:', currentFilters.showType);
+        const beforeCount = filteredResults.length;
+        filteredResults = filteredResults.filter(result => {
+          if (currentFilters.showType === 'restaurants') return result.type === 'restaurant';
+          if (currentFilters.showType === 'deals') return result.type === 'deal';
+          return true;
+        });
+        console.log('After showType filter:', beforeCount, '->', filteredResults.length);
+      }
+
+      console.log('=== FINAL RESULTS ===');
+      console.log('Total results:', filteredResults.length);
+      console.log('Restaurants:', filteredResults.filter(r => r.type === 'restaurant').length);
+      console.log('Deals:', filteredResults.filter(r => r.type === 'deal').length);
+      
+      setSearchResults(filteredResults);
     } catch (error) {
       console.error('Search failed:', error);
       toast({
@@ -253,7 +413,7 @@ export const Search: React.FC = () => {
     } finally {
       setIsSearching(false);
     }
-  }, [toast, getToken, userLocation]);
+  }, [toast, getToken, userLocation, cuisineNames, dietaryNames, filters]);
 
   const handleSearch = useCallback((query: string) => {
     // Clear previous timeout
@@ -261,18 +421,18 @@ export const Search: React.FC = () => {
       clearTimeout(searchTimeoutRef.current);
     }
 
-    // Clear results immediately if query is empty
-    if (!query.trim()) {
-      setSearchResults([]);
-      setIsSearching(false);
-      return;
-    }
-
     // Set a new timeout for debounced search
     searchTimeoutRef.current = setTimeout(() => {
-      performSearch(query);
+      performSearch(query, filters); // Pass current filters explicitly
     }, 500); // 500ms debounce
-  }, [performSearch]);
+  }, [performSearch, filters]);
+
+  // Initial load - show all restaurants/deals when page loads
+  useEffect(() => {
+    if (userLocation && cuisineNames.size > 0) {
+      performSearch('');
+    }
+  }, [userLocation, cuisineNames, performSearch]);
 
   const handleBookmarkToggle = async (id: number) => {
     console.log('Search bookmark toggle called:', id);
@@ -484,63 +644,39 @@ export const Search: React.FC = () => {
         </div>
 
           <div className="px-6 pt-4 pb-20">
-          {!searchQuery && (
-            <>
-              {/* Popular Searches */}
-              <div>
-                <h2 className="text-lg font-semibold mb-3">Popular Searches</h2>
-                <div className="flex flex-wrap gap-2">
-                  {popularSearches.map((search, index) => (
-                    <button
-                      key={index}
-                      onClick={() => {
-                        setSearchQuery(search);
-                        handleSearch(search);
-                      }}
-                      className="px-3 py-2 bg-muted text-muted-foreground rounded-full text-sm hover:bg-primary hover:text-primary-foreground transition-colors"
-                    >
-                      {search}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
+          {/* Filter and Results Header */}
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold">
+              {isSearching 
+                ? 'Searching...' 
+                : searchQuery 
+                  ? `${searchResults.length} results for "${searchQuery}"`
+                  : `${searchResults.length} restaurants & deals`
+              }
+            </h2>
+            <FilterSheet
+              filters={filters}
+              onFiltersChange={(newFilters) => {
+                console.log('Search: Filters changed to:', newFilters);
+                setFilters(newFilters);
+              }}
+              onApply={(appliedFilters) => {
+                console.log('Search: Apply clicked with filters:', appliedFilters);
+                performSearch(searchQuery, appliedFilters);
+              }}
+            />
+          </div>
 
           {/* Search Results */}
-          {searchQuery && (
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold">
-                  {isSearching ? 'Searching...' : `${searchResults.length} results for "${searchQuery}"`}
-                </h2>
-                <Button variant="outline" size="sm">
-                  <Filter className="w-4 h-4 mr-1" />
-                  Filter
-                </Button>
-              </div>
-
-              {isSearching ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
-                  <p className="text-muted-foreground">Searching for delicious deals...</p>
-                </div>
-              ) : searchResults.length > 0 ? (
-                searchResults.map((result) => (
-                  <ResultCard key={result.id} result={result} />
-                ))
-              ) : (
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground mb-4">No results found for "{searchQuery}"</p>
-                  <Button 
-                    variant="outline" 
-                    onClick={() => setSearchQuery('')}
-                  >
-                    Clear Search
-                  </Button>
-                </div>
-              )}
+          {isSearching ? (
+            <div className="text-center py-8">
+              <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+              <p className="text-muted-foreground">Searching for delicious deals...</p>
             </div>
+          ) : (
+            searchResults.map((result) => (
+              <ResultCard key={`${result.type}-${result.id}`} result={result} />
+            ))
           )}
           </div>
         </MobileLayout>
