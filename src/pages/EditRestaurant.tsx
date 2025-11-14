@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -8,8 +8,9 @@ import { MobileLayout } from '@/components/MobileLayout';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth as useClerkAuth } from '@clerk/clerk-react';
-import { Save, Loader2, Store, MapPin, Phone, Clock } from 'lucide-react';
+import { Save, Loader2, Store, MapPin, Phone, Clock, ImagePlus, Trash2 } from 'lucide-react';
 import { partnerService, Restaurant } from '@/services/partnerService';
+import { uploadImage } from '@/services/blobService';
 
 export const EditRestaurant: React.FC = () => {
   const navigate = useNavigate();
@@ -19,6 +20,10 @@ export const EditRestaurant: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingRestaurant, setIsLoadingRestaurant] = useState(true);
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -33,6 +38,7 @@ export const EditRestaurant: React.FC = () => {
     openingTime: '',
     closingTime: '',
     isActive: true,
+    imageUrl: '',
   });
 
   useEffect(() => {
@@ -61,7 +67,11 @@ export const EditRestaurant: React.FC = () => {
             openingTime: response.data.openingTime || '',
             closingTime: response.data.closingTime || '',
             isActive: response.data.isActive,
+            imageUrl: response.data.imageUrl || '',
           });
+          if (response.data.imageUrl) {
+            setImagePreview(response.data.imageUrl);
+          }
         } else {
           throw new Error(response.error || 'Failed to fetch restaurant');
         }
@@ -84,6 +94,52 @@ export const EditRestaurant: React.FC = () => {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    setImageError(null);
+
+    if (!file) {
+      event.target.value = '';
+      return;
+    }
+
+    if (!restaurantId && !restaurant?.id) {
+      setImageError('Restaurant context missing, unable to upload image.');
+      event.target.value = '';
+      return;
+    }
+
+    try {
+      setUploadingImage(true);
+      const token = await getToken();
+      if (!token) {
+        throw new Error('You must be logged in to upload images');
+      }
+
+      const ownerId = restaurantId ?? restaurant?.id?.toString() ?? 'restaurant';
+      const uploadResult = await uploadImage(file, {
+        entityType: 'restaurant',
+        ownerId,
+      });
+
+      setFormData(prev => ({ ...prev, imageUrl: uploadResult.url }));
+      setImagePreview(uploadResult.url);
+      toast({ title: 'Image uploaded', description: 'Cover image updated.' });
+    } catch (error) {
+      console.error('Image upload failed', error);
+      setImageError(error instanceof Error ? error.message : 'Image upload failed');
+    } finally {
+      setUploadingImage(false);
+      event.target.value = '';
+    }
+  };
+
+  const handleImageRemove = () => {
+    setImagePreview(null);
+    setFormData(prev => ({ ...prev, imageUrl: '' }));
+    setImageError(null);
   };
 
   const handleActiveChange = (checked: boolean) => {
@@ -136,6 +192,7 @@ export const EditRestaurant: React.FC = () => {
         openingTime: formData.openingTime || undefined,
         closingTime: formData.closingTime || undefined,
         isActive: formData.isActive,
+        imageUrl: formData.imageUrl || undefined,
       };
 
       const response = await partnerService.updateRestaurant(parseInt(restaurantId), updateData, token);
@@ -238,6 +295,64 @@ export const EditRestaurant: React.FC = () => {
               rows={3}
               className="resize-none"
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Restaurant Image</Label>
+            <Input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg"
+              className="hidden"
+              onChange={handleImageUpload}
+              disabled={isLoading || uploadingImage}
+            />
+            <div className="border border-dashed rounded-xl p-4 flex flex-col gap-3">
+              {imagePreview ? (
+                <div className="space-y-3">
+                  <img src={imagePreview} alt="Restaurant preview" className="w-full h-40 object-cover rounded-lg" />
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => imagePreview && window.open(imagePreview, '_blank')}
+                    >
+                      Preview
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isLoading || uploadingImage}
+                    >
+                      Change
+                    </Button>
+                    <Button type="button" variant="destructive" onClick={handleImageRemove}>
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-2 text-center py-4">
+                  <ImagePlus className="w-8 h-8 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">Upload a new cover image</p>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isLoading || uploadingImage}
+                  >
+                    Choose Image
+                  </Button>
+                  <p className="text-xs text-muted-foreground">PNG or JPG, up to 5MB</p>
+                </div>
+              )}
+            </div>
+            {uploadingImage && <p className="text-sm text-muted-foreground">Uploading...</p>}
+            {imageError && <p className="text-sm text-red-500">{imageError}</p>}
           </div>
 
           {/* Address Section */}

@@ -349,6 +349,7 @@ export const RestaurantDetail: React.FC = () => {
   }
 
   const hoursStatus = getHoursStatus(restaurant.openingTime, restaurant.closingTime);
+  const restaurantImage = restaurant.imageUrl?.trim() ? restaurant.imageUrl : heroImage;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex justify-center">
@@ -363,7 +364,7 @@ export const RestaurantDetail: React.FC = () => {
             {/* Restaurant Header */}
             <div className="relative">
               <img 
-                src={heroImage} 
+                src={restaurantImage}
                 alt={restaurant.name}
                 className="w-full h-64 object-cover"
               />
@@ -529,56 +530,76 @@ export const RestaurantDetail: React.FC = () => {
                       
                       {expandedSections[section.id] && menuItems[section.id] && (
                         <div className="p-4 space-y-4">
-                          {menuItems[section.id].map((item) => (
-                            <div key={item.id} className="border border-gray-600 rounded-lg p-3">
-                              <div className="flex justify-between items-start mb-2">
-                                <div className="flex-1">
-                                  <h4 className="font-medium text-white">{item.name}</h4>
-                                  <p className="text-sm text-gray-400 mt-1">{item.description}</p>
-                                  
-                                  {/* Menu Item Rating Display */}
-                                  {menuItemRatings[item.id] && menuItemRatings[item.id].totalCount > 0 && (
-                                    <div className="flex items-center gap-2 mt-2">
-                                      <StarRating rating={menuItemRatings[item.id].averageRating} readOnly size="sm" />
-                                      <span className="text-sm text-gray-400">
-                                        {menuItemRatings[item.id].averageRating.toFixed(1)} ({menuItemRatings[item.id].totalCount} {menuItemRatings[item.id].totalCount === 1 ? 'review' : 'reviews'})
-                                      </span>
+                          {menuItems[section.id].map((item) => {
+                            const itemImage = item.imageUrl?.trim()
+                              ? item.imageUrl
+                              : restaurant?.imageUrl?.trim()
+                              ? restaurant.imageUrl
+                              : heroImage;
+
+                            return (
+                              <div key={item.id} className="border border-gray-600 rounded-lg p-3">
+                                <div className="flex gap-4 mb-2">
+                                  <div className="w-20 h-20 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0">
+                                    <img
+                                      src={itemImage}
+                                      alt={item.name}
+                                      className="w-full h-full object-cover"
+                                      loading="lazy"
+                                    />
+                                  </div>
+                                  <div className="flex-1">
+                                    <div className="flex justify-between items-start">
+                                      <div className="flex-1 pr-4">
+                                        <h4 className="font-medium text-white">{item.name}</h4>
+                                        <p className="text-sm text-gray-400 mt-1">{item.description}</p>
+
+                                        {/* Menu Item Rating Display */}
+                                        {menuItemRatings[item.id] && menuItemRatings[item.id].totalCount > 0 && (
+                                          <div className="flex items-center gap-2 mt-2">
+                                            <StarRating rating={menuItemRatings[item.id].averageRating} readOnly size="sm" />
+                                            <span className="text-sm text-gray-400">
+                                              {menuItemRatings[item.id].averageRating.toFixed(1)} ({menuItemRatings[item.id].totalCount} {menuItemRatings[item.id].totalCount === 1 ? 'review' : 'reviews'})
+                                            </span>
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div className="text-right">
+                                        <span className="text-lg font-bold text-green-400">
+                                          {formatPrice(item.priceCents)}
+                                        </span>
+                                      </div>
                                     </div>
-                                  )}
+                                  </div>
                                 </div>
-                                <div className="ml-4 text-right">
-                                  <span className="text-lg font-bold text-green-400">
-                                    {formatPrice(item.priceCents)}
-                                  </span>
-                                </div>
-                              </div>
                               
-                              {/* Menu Item Actions */}
-                              <div className="flex items-center justify-between pt-2 border-t border-gray-600">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleRateMenuItem(item)}
-                                  className="text-xs flex items-center gap-1 text-gray-400 hover:text-white"
-                                >
-                                  <Star className="w-3 h-3" />
-                                  {userMenuItemRatings[item.id] ? 'Update Rating' : 'Rate Item'}
-                                </Button>
-                                
-                                {menuItemRatings[item.id] && menuItemRatings[item.id].totalCount > 0 && (
+                                {/* Menu Item Actions */}
+                                <div className="flex items-center justify-between pt-2 border-t border-gray-600">
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    onClick={() => handleViewMenuItemRatings(item)}
+                                    onClick={() => handleRateMenuItem(item)}
                                     className="text-xs flex items-center gap-1 text-gray-400 hover:text-white"
                                   >
-                                    <MessageSquare className="w-3 h-3" />
-                                    View Reviews ({menuItemRatings[item.id].totalCount})
+                                    <Star className="w-3 h-3" />
+                                    {userMenuItemRatings[item.id] ? 'Update Rating' : 'Rate Item'}
                                   </Button>
-                                )}
+                                  
+                                  {menuItemRatings[item.id] && menuItemRatings[item.id].totalCount > 0 && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleViewMenuItemRatings(item)}
+                                      className="text-xs flex items-center gap-1 text-gray-400 hover:text-white"
+                                    >
+                                      <MessageSquare className="w-3 h-3" />
+                                      View Reviews ({menuItemRatings[item.id].totalCount})
+                                    </Button>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       )}
                     </div>

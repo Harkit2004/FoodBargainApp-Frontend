@@ -20,6 +20,7 @@ export interface Restaurant {
   rating: number;
   createdAt: string;
   updatedAt: string;
+  imageUrl?: string;
 }
 
 export interface Deal {

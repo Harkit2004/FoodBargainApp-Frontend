@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -9,9 +9,10 @@ import { MobileLayout } from '@/components/MobileLayout';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth as useClerkAuth } from '@clerk/clerk-react';
-import { Save, Loader2, DollarSign } from 'lucide-react';
+import { Save, Loader2, DollarSign, ImagePlus, Trash2 } from 'lucide-react';
 import { menuService, MenuSection, MenuItem, CreateMenuItemData } from '@/services/menuService';
 import { priceToCents, centsToPrice } from '@/utils/priceUtils';
+import { uploadImage } from '@/services/blobService';
 
 export const EditMenuItem: React.FC = () => {
   const navigate = useNavigate();
@@ -22,6 +23,11 @@ export const EditMenuItem: React.FC = () => {
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [sections, setSections] = useState<MenuSection[]>([]);
   const [item, setItem] = useState<MenuItem | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [formData, setFormData] = useState<CreateMenuItemData & { price: string }>({
     name: '',
@@ -43,12 +49,7 @@ export const EditMenuItem: React.FC = () => {
 
         setIsLoadingData(true);
 
-        // Fetch sections and item data in parallel
-        const [sectionsResponse, itemResponse] = await Promise.all([
-          menuService.getMenuSections(parseInt(restaurantId), token),
-          // Note: We need to fetch the item through sections since we don't have direct item endpoint
-          menuService.getMenuSections(parseInt(restaurantId), token)
-        ]);
+        const sectionsResponse = await menuService.getMenuSections(parseInt(restaurantId), token);
 
         if (sectionsResponse.success) {
           setSections(sectionsResponse.data);
@@ -67,6 +68,7 @@ export const EditMenuItem: React.FC = () => {
 
           if (foundItem) {
             setItem(foundItem);
+            setImagePreview(foundItem.imageUrl || null);
             
             setFormData({
               name: foundItem.name,
@@ -122,6 +124,51 @@ export const EditMenuItem: React.FC = () => {
 
   const handleAvailabilityChange = (checked: boolean) => {
     setFormData(prev => ({ ...prev, isAvailable: checked }));
+  };
+
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    setImageError(null);
+
+    if (!file) {
+      event.target.value = '';
+      return;
+    }
+
+    if (!restaurantId) {
+      setImageError('Restaurant ID missing.');
+      event.target.value = '';
+      return;
+    }
+
+    try {
+      setUploadingImage(true);
+      const token = await getToken();
+      if (!token) {
+        throw new Error('You must be logged in to upload images');
+      }
+
+      const uploadResult = await uploadImage(file, {
+        entityType: 'menu_item',
+        ownerId: restaurantId,
+      });
+
+      setFormData(prev => ({ ...prev, imageUrl: uploadResult.url }));
+      setImagePreview(uploadResult.url);
+      toast({ title: 'Image uploaded', description: 'Menu item image updated.' });
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      setImageError(error instanceof Error ? error.message : 'Image upload failed');
+    } finally {
+      setUploadingImage(false);
+      event.target.value = '';
+    }
+  };
+
+  const handleImageRemove = () => {
+    setImagePreview(null);
+    setFormData(prev => ({ ...prev, imageUrl: '' }));
+    setImageError(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -341,19 +388,63 @@ export const EditMenuItem: React.FC = () => {
             />
           </div>
 
-          {/* Image URL */}
+          {/* Item Image */}
           <div className="space-y-2">
-            <Label htmlFor="imageUrl">Image URL (Optional)</Label>
+            <Label>Item Image</Label>
             <Input
-              id="imageUrl"
-              name="imageUrl"
-              type="url"
-              placeholder="https://example.com/image.jpg"
-              value={formData.imageUrl}
-              onChange={handleInputChange}
-              disabled={isLoading}
-              className="h-12"
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg"
+              className="hidden"
+              onChange={handleImageUpload}
+              disabled={isLoading || uploadingImage}
             />
+            <div className="border border-dashed rounded-xl p-4 flex flex-col gap-3">
+              {imagePreview ? (
+                <div className="space-y-3">
+                  <img src={imagePreview} alt="Menu item preview" className="w-full h-40 object-cover rounded-lg" />
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => imagePreview && window.open(imagePreview, '_blank')}
+                    >
+                      Preview
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isLoading || uploadingImage}
+                    >
+                      Change
+                    </Button>
+                    <Button type="button" variant="destructive" onClick={handleImageRemove}>
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-2 text-center py-4">
+                  <ImagePlus className="w-8 h-8 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">Add or replace the dish photo</p>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isLoading || uploadingImage}
+                  >
+                    Choose Image
+                  </Button>
+                  <p className="text-xs text-muted-foreground">PNG or JPG, up to 5MB</p>
+                </div>
+              )}
+            </div>
+            {uploadingImage && <p className="text-sm text-muted-foreground">Uploading...</p>}
+            {imageError && <p className="text-sm text-red-500">{imageError}</p>}
           </div>
 
           {/* Availability */}

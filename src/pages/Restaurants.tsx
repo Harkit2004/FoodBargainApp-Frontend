@@ -186,12 +186,13 @@ export const Restaurants: React.FC = () => {
 
   const RestaurantCard: React.FC<{ restaurant: Restaurant }> = ({ restaurant }) => {
     const hoursStatus = getHoursStatus(restaurant.openingTime, restaurant.closingTime);
+    const coverImage = restaurant.imageUrl?.trim() ? restaurant.imageUrl : heroImage;
     
     return (
       <div className="bg-gray-800 rounded-2xl shadow-xl overflow-hidden mb-4 border border-gray-700">
         <div className="relative">
           <img 
-            src={heroImage} 
+            src={coverImage}
             alt={restaurant.name}
             className="w-full h-48 object-cover"
           />

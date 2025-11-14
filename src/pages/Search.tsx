@@ -197,6 +197,9 @@ export const Search: React.FC = () => {
           const restaurantCoords = getLocationCoordinates(restaurant);
           const distanceValue = computeDistanceKm(restaurant.distanceKm, restaurantCoords);
           const distanceLabel = formatDistanceLabel(distanceValue);
+          const image = restaurant.imageUrl?.trim()
+            ? restaurant.imageUrl!
+            : heroImage;
           return {
             id: restaurant.id,
             type: 'restaurant' as const,
@@ -205,7 +208,7 @@ export const Search: React.FC = () => {
             description: restaurant.description || 'Restaurant serving delicious food',
             rating: restaurant.ratingAvg ? parseFloat(restaurant.ratingAvg.toString()) : undefined,
             distance: distanceLabel,
-            imageUrl: heroImage,
+            imageUrl: image,
             isBookmarked: restaurant.isBookmarked || false,
             tags: [hasValidCity ? city! : 'Toronto', 'Restaurant'],
             originalData: restaurant,
@@ -246,6 +249,10 @@ export const Search: React.FC = () => {
             return;
           }
 
+          const dealImage = deal.restaurant.imageUrl?.trim()
+            ? deal.restaurant.imageUrl!
+            : heroImage;
+
           mappedDeals.push({
             id: deal.id,
             type: 'deal' as const,
@@ -257,7 +264,7 @@ export const Search: React.FC = () => {
               : undefined,
             distance: distanceLabel,
             price: 'Deal',
-            imageUrl: heroImage,
+            imageUrl: dealImage,
             isBookmarked: deal.isBookmarked || false,
             tags: ['Deal', locationTag],
             cuisines: cuisineTags,

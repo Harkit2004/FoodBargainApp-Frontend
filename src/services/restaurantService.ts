@@ -36,6 +36,7 @@ export interface Restaurant {
   ratingCount?: number;
   createdAt: string;
   updatedAt: string;
+  imageUrl?: string;
   partner?: {
     id: number;
     businessName: string;
@@ -59,6 +60,7 @@ export interface MenuItem {
   priceCents: number;
   sectionId: number;
   restaurantId: number;
+  imageUrl?: string;
   section?: MenuSection;
 }
 
@@ -70,14 +72,12 @@ export interface CreateRestaurantData {
   province: string;
   postalCode: string;
   phone: string;
-  email?: string;
-  website?: string;
   latitude?: number;
   longitude?: number;
   openingTime: string;
   closingTime: string;
-  priceRange: string;
   isActive: boolean;
+  imageUrl?: string;
 }
 
 class RestaurantService {

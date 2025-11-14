@@ -73,6 +73,9 @@ A modern, mobile-first React application for discovering and managing restaurant
    # Clerk Authentication
    VITE_CLERK_PUBLISHABLE_KEY=pk_test_your_clerk_publishable_key_here
 
+  # Image Uploads (Vercel Blob)
+  VITE_BLOB_READ_WRITE_TOKEN=rw_your_vercel_blob_token_here
+
    # App Configuration
    VITE_APP_NAME="FoodBargain"
    VITE_APP_VERSION="1.0.0"

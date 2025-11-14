@@ -8,8 +8,9 @@ import { MobileLayout } from '@/components/MobileLayout';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth as useClerkAuth } from '@clerk/clerk-react';
-import { Store, MapPin, Clock, Phone, Loader2 } from 'lucide-react';
+import { Store, MapPin, Clock, Phone, Loader2, ImagePlus, Trash2 } from 'lucide-react';
 import { restaurantService, type CreateRestaurantData } from '@/services/restaurantService';
+import { uploadImage } from '@/services/blobService';
 
 interface RestaurantFormData {
   name: string;
@@ -19,12 +20,10 @@ interface RestaurantFormData {
   province: string;
   postalCode: string;
   phone: string;
-  email: string;
-  website: string;
   openingTime: string;
   closingTime: string;
-  priceRange: string;
   isActive: boolean;
+  imageUrl?: string;
 }
 
 
@@ -34,6 +33,8 @@ export const CreateRestaurant: React.FC = () => {
   const { toast } = useToast();
   const { getToken } = useClerkAuth();
   const [loading, setLoading] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   
   const [formData, setFormData] = useState<RestaurantFormData>({
     name: '',
@@ -43,15 +44,14 @@ export const CreateRestaurant: React.FC = () => {
     province: 'ON',
     postalCode: '',
     phone: '',
-    email: '',
-    website: '',
     openingTime: '09:00',
     closingTime: '21:00',
-    priceRange: '$$',
     isActive: true,
+    imageUrl: '',
   });
 
   const [errors, setErrors] = useState<Partial<RestaurantFormData>>({});
+  const [imageError, setImageError] = useState<string | null>(null);
 
   const handleInputChange = (field: keyof RestaurantFormData, value: string | boolean) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -63,6 +63,51 @@ export const CreateRestaurant: React.FC = () => {
         [field]: undefined
       }));
     }
+  };
+
+  const handleImageChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    setImageError(null);
+
+    if (!file) {
+      setFormData(prev => ({ ...prev, imageUrl: undefined }));
+      setImagePreview(null);
+      return;
+    }
+
+    try {
+      setUploadingImage(true);
+      const token = await getToken();
+      if (!token) {
+        throw new Error('You must be logged in to upload images');
+      }
+
+      const uploadResult = await uploadImage(file, {
+        entityType: 'restaurant',
+        ownerId: token,
+      });
+
+      setFormData(prev => ({ ...prev, imageUrl: uploadResult.url }));
+      setImagePreview(uploadResult.url);
+      toast({
+        title: 'Image uploaded',
+        description: 'Your restaurant image is ready.',
+      });
+    } catch (error) {
+      console.error('Image upload failed', error);
+      setImageError(error instanceof Error ? error.message : 'Image upload failed');
+      setFormData(prev => ({ ...prev, imageUrl: undefined }));
+      setImagePreview(null);
+    } finally {
+      setUploadingImage(false);
+      event.target.value = '';
+    }
+  };
+
+  const handleImageRemove = () => {
+    setFormData(prev => ({ ...prev, imageUrl: undefined }));
+    setImagePreview(null);
+    setImageError(null);
   };
 
   const validateForm = (): boolean => {
@@ -96,10 +141,6 @@ export const CreateRestaurant: React.FC = () => {
       newErrors.phone = 'Please enter a valid phone number';
     }
 
-    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = 'Please enter a valid email address';
-    }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -121,12 +162,10 @@ export const CreateRestaurant: React.FC = () => {
         province: formData.province,
         postalCode: formData.postalCode.toUpperCase(),
         phone: formData.phone,
-        email: formData.email || undefined,
-        website: formData.website || undefined,
         openingTime: formData.openingTime,
         closingTime: formData.closingTime,
-        priceRange: formData.priceRange,
         isActive: formData.isActive,
+        imageUrl: formData.imageUrl || undefined,
       };
 
       const response = await restaurantService.createRestaurant(restaurantData, token);
@@ -186,6 +225,34 @@ export const CreateRestaurant: React.FC = () => {
               </div>
 
               <div>
+                <Label>Restaurant Image</Label>
+                <div className="mt-1 border border-dashed rounded-xl p-4 flex flex-col gap-3">
+                  {imagePreview ? (
+                    <div className="space-y-3">
+                      <img src={imagePreview} alt="Restaurant preview" className="w-full h-40 object-cover rounded-lg" />
+                      <div className="flex gap-2">
+                        <Button type="button" variant="outline" className="flex-1" onClick={() => setImagePreview(imagePreview)}>
+                          Preview
+                        </Button>
+                        <Button type="button" variant="destructive" onClick={handleImageRemove}>
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center text-center gap-2 py-4">
+                      <ImagePlus className="w-8 h-8 text-muted-foreground" />
+                      <p className="text-sm text-muted-foreground">Upload a cover image to showcase your restaurant</p>
+                      <Input type="file" accept="image/png,image/jpeg" onChange={handleImageChange} disabled={uploadingImage || loading} />
+                    </div>
+                  )}
+                  {uploadingImage && <p className="text-sm text-muted-foreground">Uploading image...</p>}
+                  {imageError && <p className="text-sm text-red-500">{imageError}</p>}
+                </div>
+              </div>
+
+              <div>
                 <Label htmlFor="description">Description</Label>
                 <Textarea
                   id="description"
@@ -197,20 +264,6 @@ export const CreateRestaurant: React.FC = () => {
                 />
               </div>
 
-              <div>
-                <Label htmlFor="priceRange">Price Range</Label>
-                <Select value={formData.priceRange} onValueChange={(value) => handleInputChange('priceRange', value)}>
-                  <SelectTrigger className="mt-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="$">$ - Budget friendly</SelectItem>
-                    <SelectItem value="$$">$$ - Moderate</SelectItem>
-                    <SelectItem value="$$$">$$$ - Expensive</SelectItem>
-                    <SelectItem value="$$$$">$$$$ - Very expensive</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
           </div>
 
@@ -294,44 +347,17 @@ export const CreateRestaurant: React.FC = () => {
               Contact Information
             </h3>
             
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="phone">Phone Number *</Label>
-                <Input
-                  id="phone"
-                  type="tel"
-                  placeholder="(416) 123-4567"
-                  value={formData.phone}
-                  onChange={(e) => handleInputChange('phone', e.target.value)}
-                  className={`mt-1 ${errors.phone ? 'border-red-500' : ''}`}
-                />
-                {errors.phone && <p className="text-sm text-red-500 mt-1">{errors.phone}</p>}
-              </div>
-
-              <div>
-                <Label htmlFor="email">Email (Optional)</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="info@restaurant.com"
-                  value={formData.email}
-                  onChange={(e) => handleInputChange('email', e.target.value)}
-                  className={`mt-1 ${errors.email ? 'border-red-500' : ''}`}
-                />
-                {errors.email && <p className="text-sm text-red-500 mt-1">{errors.email}</p>}
-              </div>
-
-              <div>
-                <Label htmlFor="website">Website (Optional)</Label>
-                <Input
-                  id="website"
-                  type="url"
-                  placeholder="https://restaurant.com"
-                  value={formData.website}
-                  onChange={(e) => handleInputChange('website', e.target.value)}
-                  className="mt-1"
-                />
-              </div>
+            <div>
+              <Label htmlFor="phone">Phone Number *</Label>
+              <Input
+                id="phone"
+                type="tel"
+                placeholder="(416) 123-4567"
+                value={formData.phone}
+                onChange={(e) => handleInputChange('phone', e.target.value)}
+                className={`mt-1 ${errors.phone ? 'border-red-500' : ''}`}
+              />
+              {errors.phone && <p className="text-sm text-red-500 mt-1">{errors.phone}</p>}
             </div>
           </div>
 

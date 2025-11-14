@@ -24,6 +24,7 @@ export interface Deal {
     longitude?: number;
     ratingAvg?: number;
     ratingCount?: number;
+    imageUrl?: string;
   };
   partner: {
     id: number;
