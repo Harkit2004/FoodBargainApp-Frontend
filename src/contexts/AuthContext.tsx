@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useUser, useAuth as useClerkAuth } from '@clerk/clerk-react';
 import { apiService } from '@/services/api';
 
@@ -9,6 +9,7 @@ interface User {
   email: string;
   displayName: string;
   isPartner?: boolean;
+  isAdmin?: boolean;
   location?: string;
   phone?: string;
   cuisinePreferences?: number[];
@@ -34,6 +35,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
@@ -45,9 +47,11 @@ export const useAuth = () => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasShownAdminLanding, setHasShownAdminLanding] = useState(false);
   const { isSignedIn, user: clerkUser, isLoaded } = useUser();
   const { getToken, signOut } = useClerkAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Check if user exists in our backend after Clerk authentication
   const checkBackendAuth = useCallback(async () => {
@@ -135,8 +139,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Sign out from Clerk
       await signOut();
       
-      // Clear our user state
-      setUser(null);
+  // Clear our user state
+  setUser(null);
+  setHasShownAdminLanding(false);
       
       // Navigate to home page
       navigate('/');
@@ -151,6 +156,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       checkBackendAuth();
     }
   }, [isLoaded, checkBackendAuth]);
+
+  useEffect(() => {
+    if (!isSignedIn) {
+      if (hasShownAdminLanding) {
+        setHasShownAdminLanding(false);
+      }
+      return;
+    }
+
+    if (user?.isAdmin) {
+      if (!hasShownAdminLanding) {
+        if (location.pathname !== '/admin/console') {
+          navigate('/admin/console', {
+            replace: location.pathname === '/admin/login' || location.pathname === '/login',
+          });
+        }
+        setHasShownAdminLanding(true);
+      }
+    } else if (hasShownAdminLanding) {
+      setHasShownAdminLanding(false);
+    }
+  }, [isSignedIn, user?.isAdmin, hasShownAdminLanding, location.pathname, navigate]);
 
   const value = {
     user,

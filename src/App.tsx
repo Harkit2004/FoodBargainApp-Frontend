@@ -32,6 +32,8 @@ import { EditRestaurant } from "./pages/EditRestaurant";
 import { ViewDeal } from "./pages/ViewDeal";
 import { EditDeal } from "./pages/EditDeal";
 import NotFound from "./pages/NotFound";
+import { AdminLogin } from "./pages/AdminLogin";
+import { AdminConsole } from "./pages/AdminConsole";
 
 const queryClient = new QueryClient();
 
@@ -60,6 +62,8 @@ const App = () => (
               <Route path="/" element={<Home />} />
               <Route path="/register" element={<Register />} />
               <Route path="/login" element={<Login />} />
+              <Route path="/admin/login" element={<AdminLogin />} />
+              <Route path="/admin/console" element={<ProtectedRoute requireAdmin={true}><AdminConsole /></ProtectedRoute>} />
               <Route path="/search" element={<Search />} />
               <Route path="/partner" element={<ProtectedRoute requirePartner={true}><PartnerDashboard /></ProtectedRoute>} />
               <Route path="/partner/register" element={<ProtectedRoute><PartnerRegistration /></ProtectedRoute>} />
