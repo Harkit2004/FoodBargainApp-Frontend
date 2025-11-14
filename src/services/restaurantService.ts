@@ -14,6 +14,8 @@ export interface Deal {
   startDate: string;
   endDate: string;
   createdAt: string;
+  cuisines?: Array<{ id: number; name: string }>;
+  dietaryPreferences?: Array<{ id: number; name: string }>;
 }
 
 export interface Restaurant {
@@ -74,19 +76,38 @@ export interface CreateRestaurantData {
   longitude?: number;
   openingTime: string;
   closingTime: string;
-  cuisineIds: number[];
   priceRange: string;
   isActive: boolean;
 }
 
 class RestaurantService {
+  private normalizeRestaurantDeals(restaurant: Restaurant, fallbackDeals?: Deal[]): Restaurant {
+    const normalizedActiveDeals = restaurant.activeDeals ?? fallbackDeals ?? [];
+    const normalizedCount =
+      restaurant.activeDealsCount ?? (normalizedActiveDeals ? normalizedActiveDeals.length : 0);
+
+    return {
+      ...restaurant,
+      activeDeals: normalizedActiveDeals,
+      activeDealsCount: normalizedCount,
+    };
+  }
+
   // Partner-specific methods
   async getPartnerRestaurants(token?: string): Promise<ApiResponse<Restaurant[]>> {
-    return apiService.get('/partner/restaurants', token);
+    const response = await apiService.get<Restaurant[]>('/partner/restaurants', token);
+
+    if (response.success && response.data) {
+      response.data = response.data.map((restaurant) => this.normalizeRestaurantDeals(restaurant));
+    }
+
+    return response;
   }
 
   async createRestaurant(data: CreateRestaurantData, token?: string): Promise<ApiResponse<Restaurant>> {
-    return apiService.post('/partner/restaurants', data, token);
+    const response = await apiService.post<Restaurant>('/partner/restaurants', data, token);
+    response.data = this.normalizeRestaurantDeals(response.data);
+    return response;
   }
 
   async updateRestaurant(restaurantId: number, data: Partial<CreateRestaurantData>, token?: string): Promise<ApiResponse<Restaurant>> {
@@ -117,7 +138,15 @@ class RestaurantService {
     if (params.limit) queryParams.append('limit', params.limit.toString());
     
     const endpoint = `/search/restaurants${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-    return apiService.get(endpoint, token);
+    const response = await apiService.get<{ restaurants: Restaurant[]; pagination: Pagination }>(endpoint, token);
+
+    if (response.success && response.data?.restaurants) {
+      response.data.restaurants = response.data.restaurants.map((restaurant) =>
+        this.normalizeRestaurantDeals(restaurant)
+      );
+    }
+
+    return response;
   }
 
   // Get restaurant by ID
@@ -125,7 +154,22 @@ class RestaurantService {
     restaurant: Restaurant;
     activeDeals: Deal[];
   }>> {
-    return apiService.get(`/search/restaurants/${id}`, token);
+    const response = await apiService.get<{
+      restaurant: Restaurant;
+      activeDeals: Deal[];
+    }>(`/search/restaurants/${id}`, token);
+
+    if (response.success && response.data?.restaurant) {
+      response.data.restaurant = this.normalizeRestaurantDeals(
+        {
+          ...response.data.restaurant,
+          activeDeals: response.data.activeDeals,
+        },
+        response.data.activeDeals
+      );
+    }
+
+    return response;
   }
 
   // Menu methods
@@ -153,7 +197,11 @@ class RestaurantService {
   }
 
   async getBookmarkedRestaurants(token?: string): Promise<ApiResponse<Restaurant[]>> {
-    return apiService.get('/notifications/bookmarked-restaurants', token);
+    const response = await apiService.get<Restaurant[]>('/notifications/bookmarked-restaurants', token);
+    if (response.success && response.data) {
+      response.data = response.data.map((restaurant) => this.normalizeRestaurantDeals(restaurant));
+    }
+    return response;
   }
 
   // Rating methods

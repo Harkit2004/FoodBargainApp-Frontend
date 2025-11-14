@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,7 +9,6 @@ import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth as useClerkAuth } from '@clerk/clerk-react';
 import { Store, MapPin, Clock, Phone, Loader2 } from 'lucide-react';
-import { cuisineService, type CuisineType } from '@/services/cuisineService';
 import { restaurantService, type CreateRestaurantData } from '@/services/restaurantService';
 
 interface RestaurantFormData {
@@ -24,7 +23,6 @@ interface RestaurantFormData {
   website: string;
   openingTime: string;
   closingTime: string;
-  cuisineIds: number[];
   priceRange: string;
   isActive: boolean;
 }
@@ -36,9 +34,6 @@ export const CreateRestaurant: React.FC = () => {
   const { toast } = useToast();
   const { getToken } = useClerkAuth();
   const [loading, setLoading] = useState(false);
-  const [dataLoading, setDataLoading] = useState(true);
-  
-  const [cuisineTypes, setCuisineTypes] = useState<CuisineType[]>([]);
   
   const [formData, setFormData] = useState<RestaurantFormData>({
     name: '',
@@ -52,41 +47,11 @@ export const CreateRestaurant: React.FC = () => {
     website: '',
     openingTime: '09:00',
     closingTime: '21:00',
-    cuisineIds: [],
     priceRange: '$$',
     isActive: true,
   });
 
   const [errors, setErrors] = useState<Partial<RestaurantFormData>>({});
-
-  // Fetch cuisine types from backend
-  useEffect(() => {
-    const fetchCuisineTypes = async () => {
-      try {
-        const response = await cuisineService.getCuisineTypes();
-        if (response.success && response.data) {
-          setCuisineTypes(response.data);
-        } else {
-          toast({
-            title: "Error",
-            description: response.error || "Failed to load cuisine types.",
-            variant: "destructive",
-          });
-        }
-      } catch (error) {
-        console.error('Error fetching cuisine types:', error);
-        toast({
-          title: "Error",
-          description: "Failed to load cuisine types. Please refresh and try again.",
-          variant: "destructive",
-        });
-      } finally {
-        setDataLoading(false);
-      }
-    };
-
-    fetchCuisineTypes();
-  }, [toast]);
 
   const handleInputChange = (field: keyof RestaurantFormData, value: string | boolean) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -98,15 +63,6 @@ export const CreateRestaurant: React.FC = () => {
         [field]: undefined
       }));
     }
-  };
-
-  const handleCuisineToggle = (cuisineId: number) => {
-    setFormData(prev => ({
-      ...prev,
-      cuisineIds: prev.cuisineIds.includes(cuisineId)
-        ? prev.cuisineIds.filter(id => id !== cuisineId)
-        : [...prev.cuisineIds, cuisineId]
-    }));
   };
 
   const validateForm = (): boolean => {
@@ -169,7 +125,6 @@ export const CreateRestaurant: React.FC = () => {
         website: formData.website || undefined,
         openingTime: formData.openingTime,
         closingTime: formData.closingTime,
-        cuisineIds: formData.cuisineIds,
         priceRange: formData.priceRange,
         isActive: formData.isActive,
       };
@@ -200,24 +155,6 @@ export const CreateRestaurant: React.FC = () => {
       setLoading(false);
     }
   };
-
-  if (dataLoading) {
-    return (
-      <MobileLayout
-        showHeader={true}
-        headerTitle="Add Restaurant"
-        showBackButton={true}
-        onBackClick={() => navigate('/partner')}
-      >
-        <div className="flex items-center justify-center py-12">
-          <div className="text-center">
-            <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary" />
-            <p className="text-muted-foreground">Loading form data...</p>
-          </div>
-        </div>
-      </MobileLayout>
-    );
-  }
 
   return (
     <MobileLayout
@@ -427,30 +364,6 @@ export const CreateRestaurant: React.FC = () => {
                   className="mt-1"
                 />
               </div>
-            </div>
-          </div>
-
-          {/* Cuisine Types */}
-          <div className="bg-card rounded-xl p-4 shadow-custom-sm">
-            <h3 className="text-lg font-semibold mb-4">🍽️ Cuisine Types</h3>
-            
-            <div className="grid grid-cols-2 gap-2">
-              {cuisineTypes.map((cuisine) => (
-                <div
-                  key={cuisine.id}
-                  onClick={() => handleCuisineToggle(cuisine.id)}
-                  className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                    formData.cuisineIds.includes(cuisine.id)
-                      ? 'border-primary bg-primary/10'
-                      : 'border-border hover:border-primary/50'
-                  }`}
-                >
-                  <div className="text-center">
-                    <span className="text-xl block mb-1">🍽️</span>
-                    <span className="text-xs font-medium">{cuisine.name}</span>
-                  </div>
-                </div>
-              ))}
             </div>
           </div>
 

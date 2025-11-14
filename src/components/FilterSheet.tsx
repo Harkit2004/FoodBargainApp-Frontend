@@ -140,7 +140,7 @@ export default function FilterSheet({ filters, onFiltersChange, onApply }: Filte
         <SheetHeader>
           <SheetTitle>Filters</SheetTitle>
           <SheetDescription>
-            Filter restaurants and deals by distance, cuisine, and dietary preferences.
+            Distance filters apply to restaurant results. Cuisine and dietary filters apply to deals only.
           </SheetDescription>
         </SheetHeader>
 
@@ -200,7 +200,10 @@ export default function FilterSheet({ filters, onFiltersChange, onApply }: Filte
 
             {/* Distance Filter */}
             <div className="space-y-3">
-              <Label className="text-base font-semibold">Distance</Label>
+              <Label className="text-base font-semibold">Distance (restaurants only)</Label>
+              <p className="text-xs text-muted-foreground">
+                Limit nearby restaurants. Deals will continue to show regardless of distance.
+              </p>
               <RadioGroup
                 value={localFilters.distance === null ? 'null' : String(localFilters.distance)}
                 onValueChange={handleDistanceChange}
@@ -221,7 +224,10 @@ export default function FilterSheet({ filters, onFiltersChange, onApply }: Filte
 
             {/* Cuisine Filter */}
             <div className="space-y-3">
-              <Label className="text-base font-semibold">Cuisine</Label>
+              <Label className="text-base font-semibold">Cuisine (deals only)</Label>
+              <p className="text-xs text-muted-foreground">
+                Applies to deals. Restaurants do not have cuisine associations yet.
+              </p>
               {loading ? (
                 <div className="text-sm text-muted-foreground">Loading cuisines...</div>
               ) : (
@@ -244,7 +250,10 @@ export default function FilterSheet({ filters, onFiltersChange, onApply }: Filte
 
             {/* Dietary Preferences Filter */}
             <div className="space-y-3">
-              <Label className="text-base font-semibold">Dietary Preferences</Label>
+              <Label className="text-base font-semibold">Dietary Preferences (deals only)</Label>
+              <p className="text-xs text-muted-foreground">
+                Applies to deal results. Restaurants are not filtered by dietary preferences.
+              </p>
               {loading ? (
                 <div className="text-sm text-muted-foreground">Loading dietary preferences...</div>
               ) : (

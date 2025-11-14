@@ -17,7 +17,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@clerk/clerk-react';
 import { restaurantService, Restaurant } from '@/services/restaurantService';
 import { dealsService, Deal } from '@/services/dealsService';
-import { preferencesService } from '@/services/preferencesService';
+import { searchService, type SearchRequest } from '@/services/searchService';
 import { 
   getCurrentLocation, 
   calculateDistance, 
@@ -56,6 +56,7 @@ export const Search: React.FC = () => {
   const [userLocation, setUserLocation] = useState<Coordinates | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const latestSearchIdRef = useRef(0);
   const [filters, setFilters] = useState<FilterOptions>({
     distance: null,
     cuisines: [],
@@ -63,8 +64,6 @@ export const Search: React.FC = () => {
     showType: 'all',
     sortBy: 'relevance',
   });
-  const [cuisineNames, setCuisineNames] = useState<Map<number, string>>(new Map());
-  const [dietaryNames, setDietaryNames] = useState<Map<number, string>>(new Map());
 
   // Request user's location on component mount
   useEffect(() => {
@@ -84,21 +83,6 @@ export const Search: React.FC = () => {
     requestLocation();
   }, []);
 
-  // Load preference names for mapping IDs to names
-  useEffect(() => {
-    const loadPreferences = async () => {
-      try {
-        const prefs = await preferencesService.getAllPreferences();
-        const cuisineMap = new Map(prefs.cuisines.map(c => [c.id, c.name]));
-        const dietaryMap = new Map(prefs.dietaryPreferences.map(d => [d.id, d.name]));
-        setCuisineNames(cuisineMap);
-        setDietaryNames(dietaryMap);
-      } catch (error) {
-        console.error('Failed to load preferences:', error);
-      }
-    };
-    loadPreferences();
-  }, []);
 
   // Listen for bookmark changes from other pages
   useEffect(() => {
@@ -128,325 +112,193 @@ export const Search: React.FC = () => {
     };
   }, []);
 
-  const performSearch = useCallback(async (query: string = '', currentFilters: FilterOptions = filters) => {
-    console.log('=== SEARCH STARTED ===');
-    console.log('Search query:', query);
-    console.log('Current filters:', currentFilters);
-    console.log('User location:', userLocation);
-    
-    setIsSearching(true);
-    try {
-      const token = await getToken();
-      
-      // Build search parameters with filters
-      const searchParams: {
-        query?: string;
-        limit: number;
-        latitude?: number;
-        longitude?: number;
-        radius?: number;
-        cuisine?: string;
-        dietaryPreference?: string;
-        sortBy?: string;
-        sortOrder?: string;
-      } = { limit: 20 };
-      
-      // Add query only if provided
-      if (query.trim()) {
-        searchParams.query = query;
-      }
-      
-      // Add location and radius ONLY if distance filter is selected
-      if (userLocation && currentFilters.distance !== null) {
-        searchParams.latitude = userLocation.latitude;
-        searchParams.longitude = userLocation.longitude;
-        searchParams.radius = currentFilters.distance;
-        console.log('Distance filter applied:', currentFilters.distance, 'km');
-      } else {
-        console.log('No distance filter applied');
-      }
-      
-      // Add cuisine filter (send first selected cuisine name)
-      if (currentFilters.cuisines.length > 0) {
-        const firstCuisine = cuisineNames.get(currentFilters.cuisines[0]);
-        if (firstCuisine) {
-          searchParams.cuisine = firstCuisine;
-          console.log('Cuisine filter applied:', firstCuisine);
+  const performSearch = useCallback(
+    async (query: string = '', currentFilters: FilterOptions = filters) => {
+      const searchId = ++latestSearchIdRef.current;
+      setIsSearching(true);
+      try {
+        const token = await getToken();
+
+        const trimmedQuery = query.trim();
+        const applyDistanceFilter = currentFilters.showType !== 'deals';
+        const requestPayload: SearchRequest = {
+          query: trimmedQuery || undefined,
+          showType: currentFilters.showType,
+          sortBy: currentFilters.sortBy === 'rating' ? 'rating' : 'relevance',
+          sortOrder: currentFilters.sortBy === 'rating' ? 'desc' : 'desc',
+          latitude: userLocation?.latitude,
+          longitude: userLocation?.longitude,
+          distanceKm: applyDistanceFilter ? currentFilters.distance ?? undefined : undefined,
+          cuisineIds: currentFilters.cuisines.length ? currentFilters.cuisines : undefined,
+          dietaryPreferenceIds: currentFilters.dietaryPreferences.length
+            ? currentFilters.dietaryPreferences
+            : undefined,
+          limit: 50,
+        };
+
+        const response = await searchService.search(requestPayload, token || undefined);
+
+        if (!response.success || !response.data) {
+          throw new Error(response.error || 'Unable to fetch search results');
+        }
+
+        const { restaurants: restaurantResults = [], deals: dealResults = [] } = response.data;
+
+        const computeDistanceKm = (
+          distanceKm?: number | null,
+          coords?: Coordinates | null
+        ): number | null => {
+          if (typeof distanceKm === 'number') {
+            return distanceKm;
+          }
+          if (userLocation && coords) {
+            return calculateDistance(userLocation, coords);
+          }
+          return null;
+        };
+
+        const formatDistanceLabel = (distanceKmValue: number | null): string => {
+          if (typeof distanceKmValue === 'number') {
+            return formatDistance(distanceKmValue);
+          }
+          return userLocation ? '0 km' : 'N/A';
+        };
+
+        const matchesTagSelection = (
+          tags: Array<{ id: number; name: string }> | undefined,
+          selectedIds: number[]
+        ): boolean => {
+          if (!selectedIds.length) return true;
+          if (!tags || tags.length === 0) return false;
+          const tagIdSet = new Set(tags.map((tag) => tag.id));
+          return selectedIds.some((id) => tagIdSet.has(id));
+        };
+
+        const mappedRestaurants: SearchResult[] = (restaurantResults ?? []).map((restaurant) => {
+          const city = restaurant.city?.trim();
+          const province = restaurant.province?.trim();
+          const streetAddress = restaurant.streetAddress?.trim();
+
+          const hasValidCity = city && city !== '' && city.toLowerCase() !== 'unknown';
+          const hasValidProvince = province && province !== '' && province.toLowerCase() !== 'unknown';
+          const hasValidAddress = streetAddress && streetAddress !== '' && streetAddress.toLowerCase() !== 'unknown';
+
+          let subtitle = 'Unknown';
+          if (hasValidAddress) {
+            subtitle = streetAddress;
+          } else if (hasValidCity && hasValidProvince) {
+            subtitle = `${city}, ${province}`;
+          } else if (hasValidCity) {
+            subtitle = city;
+          } else if (hasValidProvince) {
+            subtitle = province;
+          }
+
+          const restaurantCoords = getLocationCoordinates(restaurant);
+          const distanceValue = computeDistanceKm(restaurant.distanceKm, restaurantCoords);
+          const distanceLabel = formatDistanceLabel(distanceValue);
+          return {
+            id: restaurant.id,
+            type: 'restaurant' as const,
+            title: restaurant.name,
+            subtitle,
+            description: restaurant.description || 'Restaurant serving delicious food',
+            rating: restaurant.ratingAvg ? parseFloat(restaurant.ratingAvg.toString()) : undefined,
+            distance: distanceLabel,
+            imageUrl: heroImage,
+            isBookmarked: restaurant.isBookmarked || false,
+            tags: [hasValidCity ? city! : 'Toronto', 'Restaurant'],
+            originalData: restaurant,
+          };
+        });
+
+        const mappedDeals: SearchResult[] = [];
+        (dealResults ?? []).forEach((deal) => {
+          const city = deal.restaurant.city?.trim();
+          const province = deal.restaurant.province?.trim();
+          const streetAddress = deal.restaurant.streetAddress?.trim();
+
+          const hasValidCity = city && city !== '' && city.toLowerCase() !== 'unknown';
+          const hasValidProvince = province && province !== '' && province.toLowerCase() !== 'unknown';
+          const hasValidAddress = streetAddress && streetAddress !== '' && streetAddress.toLowerCase() !== 'unknown';
+
+          let locationTag = 'Toronto';
+          if (hasValidAddress) {
+            locationTag = streetAddress;
+          } else if (hasValidCity) {
+            locationTag = city;
+          } else if (hasValidProvince) {
+            locationTag = province;
+          }
+
+          const restaurantCoords = getLocationCoordinates(deal.restaurant);
+          const distanceValue = computeDistanceKm(deal.distanceKm, restaurantCoords);
+          const distanceLabel = formatDistanceLabel(distanceValue);
+
+          const cuisineTags = deal.cuisines ?? [];
+          const dietaryTags = deal.dietaryPreferences ?? [];
+
+          if (!matchesTagSelection(cuisineTags, currentFilters.cuisines)) {
+            return;
+          }
+
+          if (!matchesTagSelection(dietaryTags, currentFilters.dietaryPreferences)) {
+            return;
+          }
+
+          mappedDeals.push({
+            id: deal.id,
+            type: 'deal' as const,
+            title: deal.title,
+            subtitle: deal.restaurant.name,
+            description: deal.description || 'Great deal available!',
+            rating: deal.restaurant.ratingAvg
+              ? parseFloat(deal.restaurant.ratingAvg.toString())
+              : undefined,
+            distance: distanceLabel,
+            price: 'Deal',
+            imageUrl: heroImage,
+            isBookmarked: deal.isBookmarked || false,
+            tags: ['Deal', locationTag],
+            cuisines: cuisineTags,
+            dietaryPreferences: dietaryTags,
+            originalData: deal,
+          });
+        });
+
+        let combinedResults: SearchResult[] = [];
+        if (currentFilters.showType !== 'deals') {
+          combinedResults = [...combinedResults, ...mappedRestaurants];
+        }
+        if (currentFilters.showType !== 'restaurants') {
+          combinedResults = [...combinedResults, ...mappedDeals];
+        }
+
+        if (currentFilters.sortBy === 'rating') {
+          combinedResults.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+        }
+
+        if (searchId === latestSearchIdRef.current) {
+          setSearchResults(combinedResults);
+        }
+      } catch (error) {
+        console.error('Search failed:', error);
+        if (searchId === latestSearchIdRef.current) {
+          toast({
+            title: 'Search Error',
+            description: 'Failed to search. Please try again.',
+            variant: 'destructive',
+          });
+          setSearchResults([]);
+        }
+      } finally {
+        if (searchId === latestSearchIdRef.current) {
+          setIsSearching(false);
         }
       }
-      
-      // Add dietary preference filter (send first selected dietary preference name)
-      if (currentFilters.dietaryPreferences.length > 0) {
-        const firstDietary = dietaryNames.get(currentFilters.dietaryPreferences[0]);
-        if (firstDietary) {
-          searchParams.dietaryPreference = firstDietary;
-          console.log('Dietary filter applied:', firstDietary);
-        }
-      }
-
-      // Add sorting parameters
-      if (currentFilters.sortBy === 'rating') {
-        searchParams.sortBy = 'ratingAvg';
-        searchParams.sortOrder = 'desc';
-        console.log('Sort by rating (highest first) applied');
-      } else {
-        searchParams.sortBy = 'relevance';
-        console.log('Sort by relevance (newest first) applied');
-      }
-      
-      console.log('API call params:', searchParams);
-      
-      // Always fetch both restaurants and deals
-      // We'll filter deals on the frontend since backend doesn't support deal filtering yet
-      const [restaurantResponse, dealResponse] = await Promise.all([
-        restaurantService.searchRestaurants(searchParams, token || undefined),
-        dealsService.getDeals({ status: 'active', limit: 100 }, token || undefined)
-      ]);
-      
-      console.log('Restaurant API response:', restaurantResponse.success, 'Count:', restaurantResponse.data?.restaurants?.length || 0);
-      console.log('Deal API response:', dealResponse.success, 'Count:', dealResponse.data?.deals?.length || 0);
-
-      const results: SearchResult[] = [];
-      const addedIds = new Set<string>(); // Track added items to prevent duplicates
-
-      // Add restaurant results
-      if (restaurantResponse.success && restaurantResponse.data) {
-        console.log('Processing', restaurantResponse.data.restaurants.length, 'restaurants');
-        restaurantResponse.data.restaurants.forEach((restaurant) => {
-          const uniqueId = `restaurant-${restaurant.id}`;
-          if (!addedIds.has(uniqueId)) {
-            const city = restaurant.city?.trim();
-            const province = restaurant.province?.trim();
-            const streetAddress = restaurant.streetAddress?.trim();
-            
-            const hasValidCity = city && city !== '' && city.toLowerCase() !== 'unknown';
-            const hasValidProvince = province && province !== '' && province.toLowerCase() !== 'unknown';
-            const hasValidAddress = streetAddress && streetAddress !== '' && streetAddress.toLowerCase() !== 'unknown';
-            
-            let subtitle = '';
-            if (hasValidAddress) {
-              subtitle = streetAddress;
-            } else if (hasValidCity && hasValidProvince) {
-              subtitle = `${city}, ${province}`;
-            } else if (hasValidCity) {
-              subtitle = city;
-            } else if (hasValidProvince) {
-              subtitle = province;
-            } else {
-              subtitle = 'Unknown';
-            }
-
-            // Calculate actual distance
-            let distance = '2.5 km'; // fallback
-            if (userLocation) {
-              const restaurantCoords = getLocationCoordinates(restaurant);
-              if (restaurantCoords) {
-                const distanceKm = calculateDistance(userLocation, restaurantCoords);
-                distance = formatDistance(distanceKm);
-              }
-            }
-            
-            addedIds.add(uniqueId);
-            results.push({
-              id: restaurant.id,
-              type: 'restaurant',
-              title: restaurant.name,
-              subtitle: subtitle,
-              description: restaurant.description || 'Restaurant serving delicious food',
-              rating: restaurant.ratingAvg ? parseFloat(restaurant.ratingAvg.toString()) : undefined,
-              distance: distance,
-              imageUrl: heroImage,
-              isBookmarked: restaurant.isBookmarked || false,
-              tags: [hasValidCity ? city : 'Toronto', 'Restaurant'],
-              originalData: restaurant
-            });
-          }
-        });
-      }
-
-      // Add deal results
-      if (dealResponse.success && dealResponse.data) {
-        console.log('Processing', dealResponse.data.deals.length, 'deals');
-        dealResponse.data.deals.forEach((deal) => {
-          const uniqueId = `deal-${deal.id}`;
-          
-          // If there's a query, filter deals by it; otherwise include all deals
-          const matchesQuery = !query.trim() || 
-            deal.title.toLowerCase().includes(query.toLowerCase()) ||
-            deal.description?.toLowerCase().includes(query.toLowerCase()) ||
-            deal.restaurant.name.toLowerCase().includes(query.toLowerCase());
-          
-          if (!addedIds.has(uniqueId) && matchesQuery) {
-            
-            const city = deal.restaurant.city?.trim();
-            const province = deal.restaurant.province?.trim();
-            const streetAddress = deal.restaurant.streetAddress?.trim();
-            
-            const hasValidCity = city && city !== '' && city.toLowerCase() !== 'unknown';
-            const hasValidProvince = province && province !== '' && province.toLowerCase() !== 'unknown';
-            const hasValidAddress = streetAddress && streetAddress !== '' && streetAddress.toLowerCase() !== 'unknown';
-            
-            let locationTag = 'Toronto';
-            if (hasValidAddress) {
-              locationTag = streetAddress;
-            } else if (hasValidCity) {
-              locationTag = city;
-            } else if (hasValidProvince) {
-              locationTag = province;
-            }
-
-            // Calculate actual distance using restaurant coordinates
-            let distance = '2.5 km'; // fallback
-            if (userLocation) {
-              const restaurantCoords = getLocationCoordinates(deal.restaurant);
-              if (restaurantCoords) {
-                const distanceKm = calculateDistance(userLocation, restaurantCoords);
-                distance = formatDistance(distanceKm);
-              }
-            }
-            
-            addedIds.add(uniqueId);
-            results.push({
-              id: deal.id,
-              type: 'deal',
-              title: deal.title,
-              subtitle: deal.restaurant.name,
-              description: deal.description || 'Great deal available!',
-              rating: deal.restaurant.ratingAvg ? parseFloat(deal.restaurant.ratingAvg.toString()) : undefined,
-              distance: distance,
-              price: 'Deal',
-              imageUrl: heroImage,
-              isBookmarked: deal.isBookmarked || false,
-              tags: ['Deal', locationTag],
-              cuisines: deal.cuisines,
-              dietaryPreferences: deal.dietaryPreferences,
-              originalData: deal
-            });
-          }
-        });
-      }
-
-      console.log('Results before frontend filtering:', results.length);
-      
-      let filteredResults = results;
-      
-      // Filter deals by cuisine (restaurants already filtered by backend)
-      if (currentFilters.cuisines.length > 0) {
-        console.log('Applying cuisine filter to deals. Selected cuisines:', currentFilters.cuisines);
-        const beforeCount = filteredResults.length;
-        filteredResults = filteredResults.filter(result => {
-          if (result.type === 'deal') {
-            const deal = result.originalData as Deal;
-            // Check if the deal has any of the selected cuisines
-            if (deal.cuisines && deal.cuisines.length > 0) {
-              const dealCuisineIds = deal.cuisines.map(c => c.id);
-              const hasMatchingCuisine = currentFilters.cuisines.some(cuisineId => 
-                dealCuisineIds.includes(cuisineId)
-              );
-              console.log(`Deal "${deal.title}" cuisines: [${dealCuisineIds}] - ${hasMatchingCuisine ? 'INCLUDED' : 'EXCLUDED'}`);
-              return hasMatchingCuisine;
-            }
-            console.log(`Deal "${deal.title}" has no cuisines - EXCLUDED`);
-            return false; // Exclude deals without cuisine data when filter is active
-          }
-          return true; // Keep all restaurants (already filtered by backend)
-        });
-        console.log('After cuisine filter:', beforeCount, '->', filteredResults.length);
-      }
-      
-      // Filter deals by dietary preferences (restaurants already filtered by backend)
-      if (currentFilters.dietaryPreferences.length > 0) {
-        console.log('Applying dietary filter to deals. Selected dietary prefs:', currentFilters.dietaryPreferences);
-        const beforeCount = filteredResults.length;
-        filteredResults = filteredResults.filter(result => {
-          if (result.type === 'deal') {
-            const deal = result.originalData as Deal;
-            // Check if the deal has any of the selected dietary preferences
-            if (deal.dietaryPreferences && deal.dietaryPreferences.length > 0) {
-              const dealDietaryIds = deal.dietaryPreferences.map(d => d.id);
-              const hasMatchingDietary = currentFilters.dietaryPreferences.some(dietaryId => 
-                dealDietaryIds.includes(dietaryId)
-              );
-              console.log(`Deal "${deal.title}" dietary: [${dealDietaryIds}] - ${hasMatchingDietary ? 'INCLUDED' : 'EXCLUDED'}`);
-              return hasMatchingDietary;
-            }
-            console.log(`Deal "${deal.title}" has no dietary preferences - EXCLUDED`);
-            return false; // Exclude deals without dietary data when filter is active
-          }
-          return true; // Keep all restaurants (already filtered by backend)
-        });
-        console.log('After dietary filter:', beforeCount, '->', filteredResults.length);
-      }
-      
-      // Apply distance filter to deals based on restaurant location
-      if (currentFilters.distance !== null && userLocation) {
-        console.log('Applying distance filter to deals:', currentFilters.distance, 'km');
-        const beforeCount = filteredResults.length;
-        filteredResults = filteredResults.filter(result => {
-          if (result.type === 'deal') {
-            const deal = result.originalData as Deal;
-            if (deal.restaurant) {
-              const restaurantCoords = getLocationCoordinates(deal.restaurant);
-              if (restaurantCoords) {
-                const distanceKm = calculateDistance(userLocation, restaurantCoords);
-                const isWithinDistance = distanceKm <= currentFilters.distance!;
-                console.log(`Deal "${deal.title}" at ${distanceKm.toFixed(2)}km - ${isWithinDistance ? 'INCLUDED' : 'EXCLUDED'}`);
-                return isWithinDistance;
-              }
-            }
-            return true;
-          }
-          return true; // Restaurants already filtered by backend
-        });
-        console.log('After distance filter:', beforeCount, '->', filteredResults.length);
-      }
-      
-      // Filter by show type
-      if (currentFilters.showType !== 'all') {
-        console.log('Applying showType filter:', currentFilters.showType);
-        const beforeCount = filteredResults.length;
-        filteredResults = filteredResults.filter(result => {
-          if (currentFilters.showType === 'restaurants') return result.type === 'restaurant';
-          if (currentFilters.showType === 'deals') return result.type === 'deal';
-          return true;
-        });
-        console.log('After showType filter:', beforeCount, '->', filteredResults.length);
-      }
-
-      // Apply sorting
-      if (currentFilters.sortBy === 'rating') {
-        console.log('Applying rating sort (highest first)');
-        filteredResults.sort((a, b) => {
-          // Get ratings - deals use restaurant rating, restaurants use own rating
-          const ratingA = a.rating || 0;
-          const ratingB = b.rating || 0;
-          
-          // Sort descending (highest rating first)
-          return ratingB - ratingA;
-        });
-      }
-
-      console.log('=== FINAL RESULTS ===');
-      console.log('Total results:', filteredResults.length);
-      console.log('Restaurants:', filteredResults.filter(r => r.type === 'restaurant').length);
-      console.log('Deals:', filteredResults.filter(r => r.type === 'deal').length);
-      if (currentFilters.sortBy === 'rating') {
-        console.log('Sorted by rating. Top 5 ratings:', filteredResults.slice(0, 5).map(r => ({ title: r.title, rating: r.rating })));
-      }
-      
-      setSearchResults(filteredResults);
-    } catch (error) {
-      console.error('Search failed:', error);
-      toast({
-        title: "Search Error",
-        description: "Failed to search. Please try again.",
-        variant: "destructive",
-      });
-      setSearchResults([]);
-    } finally {
-      setIsSearching(false);
-    }
-  }, [toast, getToken, userLocation, cuisineNames, dietaryNames, filters]);
+    },
+    [toast, getToken, userLocation, filters]
+  );
 
   const handleSearch = useCallback((query: string) => {
     // Clear previous timeout
@@ -462,10 +314,10 @@ export const Search: React.FC = () => {
 
   // Initial load - show all restaurants/deals when page loads
   useEffect(() => {
-    if (userLocation && cuisineNames.size > 0) {
+    if (userLocation) {
       performSearch('');
     }
-  }, [userLocation, cuisineNames, performSearch]);
+  }, [userLocation, performSearch]);
 
   const handleBookmarkToggle = async (id: number) => {
     console.log('Search bookmark toggle called:', id);
@@ -614,7 +466,8 @@ export const Search: React.FC = () => {
         </div>
         
         {/* Cuisine and Dietary Tags */}
-        {result.type === 'deal' && ((result.cuisines && result.cuisines.length > 0) || (result.dietaryPreferences && result.dietaryPreferences.length > 0)) && (
+        {(result.cuisines && result.cuisines.length > 0) ||
+        (result.dietaryPreferences && result.dietaryPreferences.length > 0) ? (
           <div className="flex flex-wrap gap-1.5 mb-3">
             {result.cuisines?.map((cuisine) => (
               <span
@@ -633,7 +486,7 @@ export const Search: React.FC = () => {
               </span>
             ))}
           </div>
-        )}
+        ) : null}
         
         <div className="flex flex-wrap gap-1 mb-3">
           {result.tags.map((tag, index) => (
