@@ -10,11 +10,14 @@ import {
   Star, 
   Heart,
   Utensils,
-  DollarSign
+  DollarSign,
+  Trash2,
+  Loader2
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@clerk/clerk-react';
+import { useAuth as useClerkAuth } from '@clerk/clerk-react';
+import { useAuth as useAppAuth } from '@/contexts/AuthContext';
 import { restaurantService, Restaurant } from '@/services/restaurantService';
 import { dealsService, Deal } from '@/services/dealsService';
 import { searchService, type SearchRequest } from '@/services/searchService';
@@ -49,7 +52,8 @@ interface SearchResult {
 export const Search: React.FC = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { getToken } = useAuth();
+  const { getToken } = useClerkAuth();
+  const { user } = useAppAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -64,6 +68,7 @@ export const Search: React.FC = () => {
     showType: 'all',
     sortBy: 'relevance',
   });
+  const [deletingDealId, setDeletingDealId] = useState<number | null>(null);
 
   // Request user's location on component mount
   useEffect(() => {
@@ -100,6 +105,19 @@ export const Search: React.FC = () => {
     window.addEventListener('bookmarkChanged', handleBookmarkChange as EventListener);
     return () => {
       window.removeEventListener('bookmarkChanged', handleBookmarkChange as EventListener);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleDealRemoved = (event: Event) => {
+      const customEvent = event as CustomEvent<{ id: number }>;
+      if (!customEvent.detail) return;
+      setSearchResults((prev) => prev.filter((result) => !(result.type === 'deal' && result.id === customEvent.detail.id)));
+    };
+
+    window.addEventListener('dealRemoved', handleDealRemoved);
+    return () => {
+      window.removeEventListener('dealRemoved', handleDealRemoved);
     };
   }, []);
 
@@ -396,6 +414,44 @@ export const Search: React.FC = () => {
     }
   };
 
+  const handleAdminDelete = useCallback(
+    async (result: SearchResult) => {
+      if (result.type !== 'deal') return;
+
+      const confirmed = window.confirm(
+        `Remove "${result.title}" everywhere? This cannot be undone and partners will be notified.`
+      );
+      if (!confirmed) return;
+
+      try {
+        setDeletingDealId(result.id);
+        const token = await getToken();
+  const response = await dealsService.removeDealAsAdmin(result.id, token || undefined);
+
+        if (!response.success) {
+          throw new Error(response.error || 'Failed to remove deal');
+        }
+
+        setSearchResults((prev) => prev.filter((item) => !(item.type === 'deal' && item.id === result.id)));
+        window.dispatchEvent(new CustomEvent('dealRemoved', { detail: { id: result.id } }));
+        toast({
+          title: 'Deal removed',
+          description: `${result.title} is no longer visible in the marketplace.`,
+        });
+      } catch (error) {
+        console.error('Admin delete failed:', error);
+        toast({
+          title: 'Removal failed',
+          description: error instanceof Error ? error.message : 'Unable to remove deal',
+          variant: 'destructive',
+        });
+      } finally {
+        setDeletingDealId(null);
+      }
+    },
+    [getToken, toast]
+  );
+
   const ResultCard: React.FC<{ result: SearchResult }> = ({ result }) => (
     <div className="bg-card rounded-xl shadow-custom-sm overflow-hidden mb-4">
       <div className="relative">
@@ -520,6 +576,27 @@ export const Search: React.FC = () => {
         >
           {result.type === 'deal' ? 'View Deal' : 'View Restaurant'}
         </Button>
+
+        {result.type === 'deal' && user?.isAdmin && (
+          <Button
+            variant="destructive"
+            size="sm"
+            className="w-full mt-2"
+            disabled={deletingDealId === result.id}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              handleAdminDelete(result);
+            }}
+          >
+            {deletingDealId === result.id ? (
+              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+            ) : (
+              <Trash2 className="w-4 h-4 mr-2" />
+            )}
+            Remove deal everywhere
+          </Button>
+        )}
       </div>
     </div>
   );

@@ -7,11 +7,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { StarRating } from '@/components/ui/star-rating';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@clerk/clerk-react';
 import { ratingService, Rating, RatingAggregate } from '@/services/ratingService';
-import { Loader2, MessageSquare, User, Clock, Star } from 'lucide-react';
+import { Loader2, MessageSquare, User, Clock, Star, Flag } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 interface RatingsViewProps {
@@ -20,6 +21,9 @@ interface RatingsViewProps {
   targetType: 'restaurant' | 'menu_item' | 'deal';
   targetId: number;
   targetName: string;
+  enableCommentReports?: boolean;
+  onReportComment?: (rating: Rating) => void;
+  reportedStatuses?: Record<number, { hasReported: boolean; jiraTicketId?: string | null }>;
 }
 
 export const RatingsView: React.FC<RatingsViewProps> = ({
@@ -27,7 +31,10 @@ export const RatingsView: React.FC<RatingsViewProps> = ({
   onClose,
   targetType,
   targetId,
-  targetName
+  targetName,
+  enableCommentReports = false,
+  onReportComment,
+  reportedStatuses,
 }) => {
   const { toast } = useToast();
   const { getToken } = useAuth();
@@ -101,36 +108,69 @@ export const RatingsView: React.FC<RatingsViewProps> = ({
     }
   };
 
-  const RatingCard: React.FC<{ rating: Rating }> = ({ rating }) => (
-    <div className="border rounded-lg p-4 space-y-3">
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-            <User className="w-4 h-4 text-primary-foreground" />
-          </div>
-          <div>
-            <p className="font-medium text-sm">{rating.user.displayName}</p>
-            <div className="flex items-center gap-2">
-              <StarRating rating={rating.rating} readOnly size="sm" />
-              <span className="text-xs text-muted-foreground">
-                {rating.rating}/5
-              </span>
+  const RatingCard: React.FC<{ rating: Rating }> = ({ rating }) => {
+    const reportedStatus = reportedStatuses?.[rating.id];
+    const canReport =
+      enableCommentReports &&
+      targetType === 'restaurant' &&
+      Boolean(rating.comment) &&
+      typeof onReportComment === 'function';
+
+    return (
+      <div className="border rounded-lg p-4 space-y-3">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
+              <User className="w-4 h-4 text-primary-foreground" />
+            </div>
+            <div>
+              <p className="font-medium text-sm">{rating.user.displayName}</p>
+              <div className="flex items-center gap-2">
+                <StarRating rating={rating.rating} readOnly size="sm" />
+                <span className="text-xs text-muted-foreground">
+                  {rating.rating}/5
+                </span>
+              </div>
             </div>
           </div>
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Clock className="w-3 h-3" />
+            {formatDistanceToNow(new Date(rating.createdAt), { addSuffix: true })}
+          </div>
         </div>
-        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-          <Clock className="w-3 h-3" />
-          {formatDistanceToNow(new Date(rating.createdAt), { addSuffix: true })}
-        </div>
+
+        {rating.comment && (
+          <div className="space-y-2 pl-10">
+            <p className="text-sm text-muted-foreground">{rating.comment}</p>
+            {canReport && (
+              <div className="flex items-center gap-2">
+                {reportedStatus?.hasReported ? (
+                  <Badge variant="secondary" className="text-[11px]">
+                    Issue Logged
+                  </Badge>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs gap-1"
+                    onClick={() => onReportComment?.(rating)}
+                  >
+                    <Flag className="w-3 h-3" />
+                    Report
+                  </Button>
+                )}
+                {reportedStatus?.jiraTicketId && (
+                  <span className="text-[11px] text-muted-foreground">
+                    {reportedStatus.jiraTicketId}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
-      
-      {rating.comment && (
-        <p className="text-sm text-muted-foreground pl-10">
-          {rating.comment}
-        </p>
-      )}
-    </div>
-  );
+    );
+  };
 
   const RatingDistribution: React.FC<{ aggregate: RatingAggregate }> = ({ aggregate }) => (
     <div className="space-y-2">

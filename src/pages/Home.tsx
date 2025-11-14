@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { MobileLayout } from '@/components/MobileLayout';
 import { BottomNavigation } from '@/components/BottomNavigation';
-import { Search, MapPin, Bell, Heart, Star, ArrowRight, Shield, Clock, Share2 } from 'lucide-react';
+import { Search, MapPin, Bell, Heart, Star, ArrowRight, Shield, Clock, Share2, Trash2, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAuth as useClerkAuth } from '@clerk/clerk-react';
@@ -34,6 +34,7 @@ export const Home: React.FC = () => {
   const [selectedCuisine, setSelectedCuisine] = useState<string>('all');
   const [isLoading, setIsLoading] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0); // Static count for demo
+  const [deletingDealId, setDeletingDealId] = useState<number | null>(null);
 
   const cuisineTypes = ['all', 'Italian', 'American', 'Japanese', 'Mexican', 'Chinese', 'Indian'];
 
@@ -66,6 +67,19 @@ export const Home: React.FC = () => {
       loadDeals();
     }
   }, [isAuthenticated, loadDeals]);
+
+  useEffect(() => {
+    const handleDealRemoved = (event: Event) => {
+      const customEvent = event as CustomEvent<{ id: number }>;
+      if (!customEvent.detail) return;
+      setDeals((prev) => prev.filter((deal) => deal.id !== customEvent.detail.id));
+    };
+
+    window.addEventListener('dealRemoved', handleDealRemoved);
+    return () => {
+      window.removeEventListener('dealRemoved', handleDealRemoved);
+    };
+  }, []);
 
   // Listen for bookmark changes from other pages
   useEffect(() => {
@@ -171,6 +185,42 @@ export const Home: React.FC = () => {
   const filteredDeals = selectedCuisine === 'all' 
     ? deals 
     : deals.filter(deal => deal.restaurant.name.toLowerCase().includes(selectedCuisine.toLowerCase()));
+
+  const handleAdminDelete = useCallback(
+    async (deal: ApiDeal) => {
+      const confirmed = window.confirm(
+        `Remove "${deal.title}" everywhere? This cannot be undone and will notify the partner.`
+      );
+      if (!confirmed) return;
+
+      try {
+        setDeletingDealId(deal.id);
+        const token = await getToken();
+  const response = await dealsService.removeDealAsAdmin(deal.id, token || undefined);
+
+        if (!response.success) {
+          throw new Error(response.error || 'Failed to remove deal');
+        }
+
+        setDeals((prev) => prev.filter((item) => item.id !== deal.id));
+        window.dispatchEvent(new CustomEvent('dealRemoved', { detail: { id: deal.id } }));
+        toast({
+          title: 'Deal removed',
+          description: `${deal.title} is no longer visible in the marketplace.`,
+        });
+      } catch (error) {
+        console.error('Admin delete failed:', error);
+        toast({
+          title: 'Removal failed',
+          description: error instanceof Error ? error.message : 'Unable to remove deal',
+          variant: 'destructive',
+        });
+      } finally {
+        setDeletingDealId(null);
+      }
+    },
+    [getToken, toast]
+  );
 
   // If user is not authenticated, show beautiful welcome screen
   if (!isAuthenticated) {
@@ -388,6 +438,26 @@ export const Home: React.FC = () => {
             <Share2 className="w-4 h-4" />
           </Button>
         </div>
+
+        {user?.isAdmin && (
+          <Button
+            variant="destructive"
+            size="sm"
+            className="w-full mt-3"
+            disabled={deletingDealId === deal.id}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleAdminDelete(deal);
+            }}
+          >
+            {deletingDealId === deal.id ? (
+              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+            ) : (
+              <Trash2 className="w-4 h-4 mr-2" />
+            )}
+            Remove deal everywhere
+          </Button>
+        )}
         
         <p className="text-xs text-gray-400 mt-2 text-center">
           Expires: {formatDateShort(deal.endDate)}

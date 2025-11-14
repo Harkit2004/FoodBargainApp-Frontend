@@ -2,11 +2,13 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { MobileLayout } from '@/components/MobileLayout';
 import { BottomNavigation } from '@/components/BottomNavigation';
-import { Heart, Star, MapPin, Utensils, DollarSign, Loader2 } from 'lucide-react';
+import { Heart, Star, MapPin, Utensils, DollarSign, Loader2, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@clerk/clerk-react';
+import { useAuth as useClerkAuth } from '@clerk/clerk-react';
+import { useAuth as useAppAuth } from '@/contexts/AuthContext';
 import { favoritesService, FavoriteItem } from '@/services/favoritesService';
+import { dealsService } from '@/services/dealsService';
 import { 
   getCurrentLocation, 
   calculateDistance, 
@@ -20,11 +22,13 @@ import heroImage from '@/assets/hero-food.jpg';
 export const Favorites: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { getToken } = useAuth();
+  const { getToken } = useClerkAuth();
+  const { user } = useAppAuth();
   const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
   const [activeTab, setActiveTab] = useState<'all' | 'restaurants' | 'deals'>('all');
   const [loading, setLoading] = useState(true);
   const [removingId, setRemovingId] = useState<number | null>(null);
+  const [adminDeletingId, setAdminDeletingId] = useState<number | null>(null);
   const [userLocation, setUserLocation] = useState<Coordinates | null>(null);
 
   // Request user's location on component mount
@@ -74,6 +78,19 @@ export const Favorites: React.FC = () => {
   useEffect(() => {
     loadFavorites();
   }, [loadFavorites]);
+
+  useEffect(() => {
+    const handleDealRemoved = (event: Event) => {
+      const customEvent = event as CustomEvent<{ id: number }>;
+      if (!customEvent.detail) return;
+      setFavorites((prev) => prev.filter((item) => !(item.type === 'deal' && item.id === customEvent.detail.id)));
+    };
+
+    window.addEventListener('dealRemoved', handleDealRemoved);
+    return () => {
+      window.removeEventListener('dealRemoved', handleDealRemoved);
+    };
+  }, []);
 
   const filteredFavorites = favorites.filter(item => {
     if (activeTab === 'all') return true;
@@ -224,6 +241,54 @@ export const Favorites: React.FC = () => {
         >
           {item.type === 'deal' ? 'View Deal' : 'View Restaurant'}
         </Button>
+
+        {item.type === 'deal' && user?.isAdmin && (
+          <Button
+            variant="destructive"
+            size="sm"
+            className="w-full mt-2"
+            disabled={adminDeletingId === item.id}
+            onClick={async () => {
+              const confirmed = window.confirm(
+                `Remove "${item.title}" everywhere? This cannot be undone and partners will be notified.`
+              );
+              if (!confirmed) return;
+
+              try {
+                setAdminDeletingId(item.id);
+                const token = await getToken();
+                const response = await dealsService.removeDealAsAdmin(item.id, token || undefined);
+
+                if (!response.success) {
+                  throw new Error(response.error || 'Failed to remove deal');
+                }
+
+                setFavorites((prev) => prev.filter((fav) => !(fav.type === 'deal' && fav.id === item.id)));
+                window.dispatchEvent(new CustomEvent('dealRemoved', { detail: { id: item.id } }));
+                toast({
+                  title: 'Deal removed',
+                  description: `${item.title} is no longer visible in the marketplace.`,
+                });
+              } catch (error) {
+                console.error('Admin delete failed:', error);
+                toast({
+                  title: 'Removal failed',
+                  description: error instanceof Error ? error.message : 'Unable to remove deal',
+                  variant: 'destructive',
+                });
+              } finally {
+                setAdminDeletingId(null);
+              }
+            }}
+          >
+            {adminDeletingId === item.id ? (
+              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+            ) : (
+              <Trash2 className="w-4 h-4 mr-2" />
+            )}
+            Remove deal everywhere
+          </Button>
+        )}
       </div>
     </div>
     );

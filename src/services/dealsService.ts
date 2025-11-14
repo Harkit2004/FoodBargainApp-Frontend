@@ -148,6 +148,13 @@ class DealsService {
     return apiService.delete(`/partner-deals/${dealId}`);
   }
 
+  async removeDealAsAdmin(
+    dealId: number,
+    token?: string
+  ): Promise<ApiResponse<{ dealId: number; removed: boolean }>> {
+    return apiService.delete(`/deals/${dealId}`, token);
+  }
+
   async activateDeal(dealId: number): Promise<ApiResponse<{ success: boolean; message?: string }>> {
     return apiService.put(`/partner-deals/${dealId}/activate`);
   }
