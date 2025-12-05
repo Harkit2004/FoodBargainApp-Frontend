@@ -90,6 +90,8 @@ export const RestaurantDetail: React.FC = () => {
       
       if (hasRated && rating) {
         setUserRating(rating);
+      } else {
+        setUserRating(null);
       }
     } catch (error) {
       console.error('Failed to load user rating:', error);
@@ -118,28 +120,26 @@ export const RestaurantDetail: React.FC = () => {
       ]);
       
       const ratingsMap: { [itemId: number]: { averageRating: number; totalCount: number } } = {};
-      const userRatingsMap: { [itemId: number]: MyRating } = {};
       
       itemIds.forEach((itemId, index) => {
-        console.log(`Item ${itemId} - Rating result:`, ratingsResults[index]);
-        console.log(`Item ${itemId} - User rating result:`, userRatingsResults[index]);
-        
         if (ratingsResults[index].success && ratingsResults[index].data) {
           ratingsMap[itemId] = ratingsResults[index].data;
-          console.log(`Added rating for item ${itemId}:`, ratingsMap[itemId]);
-        }
-        
-        if (userRatingsResults[index].hasRated && userRatingsResults[index].rating) {
-          userRatingsMap[itemId] = userRatingsResults[index].rating!;
-          console.log(`Added user rating for item ${itemId}:`, userRatingsMap[itemId]);
         }
       });
       
-      console.log('Final ratingsMap to merge:', ratingsMap);
-      console.log('Final userRatingsMap to merge:', userRatingsMap);
-      
       setMenuItemRatings(prev => ({ ...prev, ...ratingsMap }));
-      setUserMenuItemRatings(prev => ({ ...prev, ...userRatingsMap }));
+      
+      setUserMenuItemRatings(prev => {
+        const newState = { ...prev };
+        itemIds.forEach((itemId, index) => {
+          if (userRatingsResults[index].hasRated && userRatingsResults[index].rating) {
+            newState[itemId] = userRatingsResults[index].rating!;
+          } else {
+            delete newState[itemId];
+          }
+        });
+        return newState;
+      });
     } catch (error) {
       console.error('Failed to load menu item ratings:', error);
     }
@@ -709,6 +709,7 @@ export const RestaurantDetail: React.FC = () => {
                loadMenuItemRatings([selectedMenuItem.id]);
             } else {
                loadRestaurant();
+               loadUserRating();
             }
           }}
         />

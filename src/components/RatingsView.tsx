@@ -13,8 +13,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth as useClerkAuth } from '@clerk/clerk-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { ratingService, Rating, RatingAggregate } from '@/services/ratingService';
-import { tagService } from '@/services/tagService';
-import { Loader2, MessageSquare, User, Clock, Star, Flag, Trash2, X } from 'lucide-react';
+import { tagService, ReviewTag } from '@/services/tagService';
+import { Loader2, MessageSquare, User, Clock, Star, Flag, Trash2, X, Filter } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 interface RatingsViewProps {
@@ -48,6 +48,8 @@ export const RatingsView: React.FC<RatingsViewProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [hasNextPage, setHasNextPage] = useState(false);
+  const [availableTags, setAvailableTags] = useState<ReviewTag[]>([]);
+  const [selectedTags, setSelectedTags] = useState<number[]>([]);
 
   const loadRatings = useCallback(async (page: number = 1) => {
     try {
@@ -56,7 +58,7 @@ export const RatingsView: React.FC<RatingsViewProps> = ({
       const response = await ratingService.getRatings(
         targetType,
         targetId,
-        { page, limit: 10 },
+        { page, limit: 10, tags: selectedTags },
         token || undefined
       );
 
@@ -86,13 +88,35 @@ export const RatingsView: React.FC<RatingsViewProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [targetType, targetId, getToken, toast]);
+  }, [targetType, targetId, getToken, toast, selectedTags]);
 
   useEffect(() => {
     if (isOpen) {
       loadRatings(1);
     }
   }, [isOpen, loadRatings]);
+
+  useEffect(() => {
+    const fetchTags = async () => {
+      const response = await tagService.getTags();
+      if (response.success && response.data) {
+        setAvailableTags(response.data);
+      }
+    };
+    if (isOpen) {
+      fetchTags();
+    } else {
+      setSelectedTags([]);
+    }
+  }, [isOpen]);
+
+  const toggleTag = (tagId: number) => {
+    setSelectedTags(prev => 
+      prev.includes(tagId) 
+        ? prev.filter(id => id !== tagId)
+        : [...prev, tagId]
+    );
+  };
 
   const loadMoreRatings = () => {
     if (!isLoading && hasNextPage) {
@@ -141,6 +165,8 @@ export const RatingsView: React.FC<RatingsViewProps> = ({
       const response = await tagService.deleteTag(tagId, token || '');
       if (response.success) {
         toast({ title: "Tag deleted", description: "Tag removed globally." });
+        setAvailableTags(prev => prev.filter(t => t.id !== tagId));
+        setSelectedTags(prev => prev.filter(id => id !== tagId));
         loadRatings(currentPage); // Reload to refresh tags
       } else {
         toast({ title: "Error", description: response.error || "Failed to delete tag", variant: "destructive" });
@@ -314,6 +340,38 @@ export const RatingsView: React.FC<RatingsViewProps> = ({
                 <div className="flex-1">
                   <RatingDistribution aggregate={aggregate} />
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Filter by Tags */}
+          {availableTags.length > 0 && (
+            <div className="border rounded-lg p-4 space-y-2">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Filter className="w-4 h-4" />
+                Filter by tags
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {availableTags.map(tag => (
+                  <Badge
+                    key={tag.id}
+                    variant={selectedTags.includes(tag.id) ? "default" : "outline"}
+                    className="cursor-pointer hover:bg-primary/90"
+                    onClick={() => toggleTag(tag.id)}
+                  >
+                    {tag.name}
+                  </Badge>
+                ))}
+                {selectedTags.length > 0 && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => setSelectedTags([])}
+                    className="h-6 px-2 text-xs"
+                  >
+                    Clear
+                  </Button>
+                )}
               </div>
             </div>
           )}

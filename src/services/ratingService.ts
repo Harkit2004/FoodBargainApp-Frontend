@@ -122,6 +122,7 @@ class RatingService {
     params?: {
       page?: number;
       limit?: number;
+      tags?: number[];
     },
     token?: string
   ): Promise<ApiResponse<RatingsResponse>> {
@@ -133,6 +134,7 @@ class RatingService {
     
     if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.tags && params.tags.length > 0) queryParams.append('tags', params.tags.join(','));
     
     const endpoint = `/ratings?${queryParams.toString()}`;
     return apiService.get(endpoint, authToken || undefined);
