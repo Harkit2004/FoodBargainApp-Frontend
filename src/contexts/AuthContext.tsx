@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useUser, useAuth as useClerkAuth } from '@clerk/clerk-react';
 import { apiService } from '@/services/api';
+import { cache } from '@/utils/cache';
 
 interface User {
   id: string;
@@ -147,9 +148,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Sign out from Clerk
       await signOut();
       
-  // Clear our user state
-  setUser(null);
-  setHasShownAdminLanding(false);
+      // Clear our user state
+      setUser(null);
+      setHasShownAdminLanding(false);
+      
+      // Clear application cache
+      cache.clear();
       
       // Navigate to home page
       navigate('/');

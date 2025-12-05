@@ -1,4 +1,8 @@
 import { apiService, ApiResponse } from './api';
+import { cache } from '@/utils/cache';
+
+const DEALS_CACHE_KEY = 'deals_cache';
+const CACHE_TTL_MINUTES = 24 * 60; // 24 hours
 
 export interface Pagination {
   page: number;
@@ -69,7 +73,51 @@ class DealsService {
     if (params?.restaurantId) queryParams.append('restaurantId', params.restaurantId.toString());
     
     const endpoint = `/deals${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-    return apiService.get(endpoint, token);
+    
+    // Generate a cache key based on params
+    const cacheKey = `${DEALS_CACHE_KEY}_${JSON.stringify(params || {})}`;
+
+    try {
+      const response = await apiService.get<{ deals: Deal[]; pagination: Pagination }>(endpoint, token);
+      
+      if (response.success && response.data) {
+        // Save to cache
+        cache.set(cacheKey, response.data, CACHE_TTL_MINUTES);
+      } else if (!response.success) {
+        // If request failed (e.g. network error), try to fallback to cache
+        const cachedData = cache.get<{ deals: Deal[]; pagination: Pagination }>(cacheKey);
+        if (cachedData) {
+          console.log('Serving deals from cache due to API error');
+          return {
+            success: true,
+            data: cachedData
+          };
+        }
+      }
+      
+      return response;
+    } catch (error) {
+      // If unexpected error, try cache
+      const cachedData = cache.get<{ deals: Deal[]; pagination: Pagination }>(cacheKey);
+      if (cachedData) {
+        console.log('Serving deals from cache due to exception');
+        return {
+          success: true,
+          data: cachedData
+        };
+      }
+      throw error;
+    }
+  }
+
+  getCachedDeals(params?: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    restaurantId?: number;
+  }): { deals: Deal[]; pagination: Pagination } | null {
+    const cacheKey = `${DEALS_CACHE_KEY}_${JSON.stringify(params || {})}`;
+    return cache.get(cacheKey);
   }
 
   async getDealById(dealId: number, token?: string): Promise<ApiResponse<Deal>> {

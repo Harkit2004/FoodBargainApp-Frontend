@@ -42,7 +42,16 @@ export const Home: React.FC = () => {
 
   const loadDeals = useCallback(async () => {
     try {
-      setIsLoading(true);
+      // Try to load from cache first for instant display
+      const cachedData = dealsService.getCachedDeals({ status: 'active' });
+      if (cachedData) {
+        console.log('Loaded deals from cache');
+        setDeals(cachedData.deals);
+        setIsLoading(false); // Don't show full page loader if we have content
+      } else {
+        setIsLoading(true);
+      }
+
       const token = await getToken();
       const response = await dealsService.getDeals({ status: 'active' }, token || undefined);
       
@@ -54,11 +63,15 @@ export const Home: React.FC = () => {
       }
     } catch (error) {
       console.error('Failed to load deals:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load deals. Please try again.",
-        variant: "destructive",
-      });
+      // Only show error toast if we don't have cached data
+      const cachedData = dealsService.getCachedDeals({ status: 'active' });
+      if (!cachedData) {
+        toast({
+          title: "Error",
+          description: "Failed to load deals. Please try again.",
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsLoading(false);
     }
