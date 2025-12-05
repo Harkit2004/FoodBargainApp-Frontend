@@ -18,6 +18,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth as useClerkAuth } from '@clerk/clerk-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { LazyImage } from '@/components/ui/LazyImage';
 import { restaurantService, Restaurant, MenuSection, MenuItem, Deal } from '@/services/restaurantService';
 import { ratingService, MyRating } from '@/services/ratingService';
 import { StarRating } from '@/components/ui/star-rating';
@@ -366,10 +367,11 @@ export const RestaurantDetail: React.FC = () => {
           <div className="pb-20">
             {/* Restaurant Header */}
             <div className="relative">
-              <img 
+              <LazyImage 
                 src={restaurantImage}
                 alt={restaurant.name}
-                className="w-full h-64 object-cover"
+                containerClassName="w-full h-64"
+                className="object-cover"
               />
               <button
                 onClick={toggleBookmark}
@@ -586,11 +588,11 @@ export const RestaurantDetail: React.FC = () => {
                               <div key={item.id} className="border border-gray-600 rounded-lg p-3">
                                 <div className="flex gap-4 mb-2">
                                   <div className="w-20 h-20 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0">
-                                    <img
+                                    <LazyImage
                                       src={itemImage}
                                       alt={item.name}
-                                      className="w-full h-full object-cover"
-                                      loading="lazy"
+                                      containerClassName="w-full h-full"
+                                      className="object-cover"
                                     />
                                   </div>
                                   <div className="flex-1">

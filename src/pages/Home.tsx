@@ -11,6 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import { formatDateShort } from '@/utils/dateUtils';
 import heroImage from '@/assets/hero-food.jpg';
 import { DealCard } from '@/components/DealCard';
+import { LazyImage } from '@/components/ui/LazyImage';
 
 // Helper function to format location - returns lat,lng for coordinates
 const formatLocation = (locationString: string): string => {
@@ -248,10 +249,12 @@ export const Home: React.FC = () => {
 
           {/* Hero Image */}
           <div className="w-full max-w-sm mb-10 rounded-2xl overflow-hidden shadow-xl shadow-blue-500/20 ring-1 ring-blue-500/30 animate-fade-in-scale hover:shadow-2xl hover:shadow-blue-500/30 transition-all duration-300">
-            <img 
+            <LazyImage 
               src={heroImage} 
               alt="Delicious food collection" 
-              className="w-full h-56 object-cover"
+              containerClassName="w-full h-56"
+              className="object-cover"
+              loading="eager"
             />
           </div>
 

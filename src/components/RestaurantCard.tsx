@@ -7,6 +7,7 @@ import { Restaurant } from '@/services/restaurantService';
 import { StarRating } from '@/components/ui/star-rating';
 import { openMapNavigation, formatAddress } from '@/utils/locationUtils';
 import heroImage from '@/assets/hero-food.jpg';
+import { LazyImage } from './ui/LazyImage';
 
 interface RestaurantCardProps {
   restaurant: Restaurant;
@@ -63,10 +64,11 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = ({
   return (
     <div className="bg-gray-800 rounded-2xl shadow-xl overflow-hidden mb-4 border border-gray-700">
       <div className="relative">
-        <img 
+        <LazyImage 
           src={coverImage}
           alt={restaurant.name}
-          className="w-full h-48 object-cover"
+          containerClassName="w-full h-48"
+          className="object-cover"
         />
         <button
           onClick={(e) => {

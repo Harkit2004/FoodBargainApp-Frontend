@@ -11,6 +11,7 @@ import { useAuth as useClerkAuth } from '@clerk/clerk-react';
 import { Store, MapPin, Clock, Phone, Loader2, ImagePlus, Trash2 } from 'lucide-react';
 import { restaurantService, type CreateRestaurantData } from '@/services/restaurantService';
 import { uploadImage } from '@/services/blobService';
+import { LazyImage } from '@/components/ui/LazyImage';
 
 interface RestaurantFormData {
   name: string;
@@ -229,7 +230,12 @@ export const CreateRestaurant: React.FC = () => {
                 <div className="mt-1 border border-dashed rounded-xl p-4 flex flex-col gap-3">
                   {imagePreview ? (
                     <div className="space-y-3">
-                      <img src={imagePreview} alt="Restaurant preview" className="w-full h-40 object-cover rounded-lg" />
+                      <LazyImage 
+                        src={imagePreview} 
+                        alt="Restaurant preview" 
+                        containerClassName="w-full h-40 rounded-lg"
+                        className="object-cover" 
+                      />
                       <div className="flex gap-2">
                         <Button type="button" variant="outline" className="flex-1" onClick={() => setImagePreview(imagePreview)}>
                           Preview

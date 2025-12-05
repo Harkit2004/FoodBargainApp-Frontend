@@ -18,6 +18,7 @@ import {
   type Coordinates 
 } from '@/utils/locationUtils';
 import heroImage from '@/assets/hero-food.jpg';
+import { LazyImage } from '@/components/ui/LazyImage';
 
 export const Favorites: React.FC = () => {
   const navigate = useNavigate();
@@ -143,10 +144,11 @@ export const Favorites: React.FC = () => {
     return (
     <div className="bg-card rounded-xl shadow-custom-sm overflow-hidden mb-4">
       <div className="relative">
-        <img 
+        <LazyImage 
           src={item.imageUrl || heroImage}
           alt={item.title}
-          className="w-full h-32 object-cover"
+          containerClassName="w-full h-32"
+          className="object-cover"
         />
         <button
           onClick={() => removeFavorite(item)}

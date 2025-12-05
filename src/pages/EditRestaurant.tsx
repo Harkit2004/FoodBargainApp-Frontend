@@ -11,6 +11,7 @@ import { useAuth as useClerkAuth } from '@clerk/clerk-react';
 import { Save, Loader2, Store, MapPin, Phone, Clock, ImagePlus, Trash2 } from 'lucide-react';
 import { partnerService, Restaurant } from '@/services/partnerService';
 import { uploadImage } from '@/services/blobService';
+import { LazyImage } from '@/components/ui/LazyImage';
 
 export const EditRestaurant: React.FC = () => {
   const navigate = useNavigate();
@@ -310,7 +311,7 @@ export const EditRestaurant: React.FC = () => {
             <div className="border border-dashed rounded-xl p-4 flex flex-col gap-3">
               {imagePreview ? (
                 <div className="space-y-3">
-                  <img src={imagePreview} alt="Restaurant preview" className="w-full h-40 object-cover rounded-lg" />
+                  <LazyImage src={imagePreview || undefined} alt="Restaurant preview" className="w-full h-40 object-cover rounded-lg" />
                   <div className="flex flex-wrap gap-2">
                     <Button
                       type="button"

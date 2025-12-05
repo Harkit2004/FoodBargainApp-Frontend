@@ -18,6 +18,7 @@ import {
   MessageSquare,
   AlertTriangle
 } from 'lucide-react';
+import { LazyImage } from '@/components/ui/LazyImage';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth as useClerkAuth } from '@clerk/clerk-react';
@@ -420,10 +421,11 @@ export const DealDetail: React.FC = () => {
           <div className="pb-20">
             {/* Hero Image */}
             <div className="relative">
-              <img 
+              <LazyImage 
                 src={heroImage} 
                 alt={deal.title}
-                className="w-full h-48 object-cover"
+                containerClassName="w-full h-48"
+                className="object-cover"
               />
 
               {/* Actions */}

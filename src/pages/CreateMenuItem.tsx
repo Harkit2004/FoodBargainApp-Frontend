@@ -13,6 +13,7 @@ import { Save, Loader2, DollarSign, ImagePlus, Trash2 } from 'lucide-react';
 import { menuService, MenuSection, CreateMenuItemData } from '@/services/menuService';
 import { priceToCents } from '@/utils/priceUtils';
 import { uploadImage } from '@/services/blobService';
+import { LazyImage } from '@/components/ui/LazyImage';
 
 export const CreateMenuItem: React.FC = () => {
   const navigate = useNavigate();
@@ -379,7 +380,7 @@ export const CreateMenuItem: React.FC = () => {
             <div className="border border-dashed rounded-xl p-4 flex flex-col gap-3">
               {imagePreview ? (
                 <div className="space-y-3">
-                  <img src={imagePreview} alt="Menu item preview" className="w-full h-40 object-cover rounded-lg" />
+                  <LazyImage src={imagePreview || undefined} alt="Menu item preview" className="w-full h-40 object-cover rounded-lg" />
                   <div className="flex flex-wrap gap-2">
                     <Button
                       type="button"

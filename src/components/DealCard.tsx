@@ -7,6 +7,7 @@ import { Deal } from '@/services/dealsService';
 import { formatDateShort } from '@/utils/dateUtils';
 import { openMapNavigation, formatAddress } from '@/utils/locationUtils';
 import heroImage from '@/assets/hero-food.jpg';
+import { LazyImage } from './ui/LazyImage';
 
 interface DealCardProps {
   deal: Deal;
@@ -40,10 +41,11 @@ export const DealCard: React.FC<DealCardProps> = ({
       onClick={() => navigate(`/deals/${deal.id}`)}
     >
       <div className="relative">
-        <img 
+        <LazyImage 
           src={heroImage} 
           alt={deal.title}
-          className="w-full h-48 object-cover"
+          containerClassName="w-full h-48"
+          className="object-cover"
         />
         <div className="absolute top-3 left-3">
           <span className="bg-blue-500 text-white px-2 py-1 rounded-full text-sm font-bold shadow-lg">
