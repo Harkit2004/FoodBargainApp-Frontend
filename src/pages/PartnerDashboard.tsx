@@ -82,7 +82,6 @@ export const PartnerDashboard: React.FC = () => {
             id: deal.id,
             title: deal.title,
             restaurant: deal.restaurant.name,
-            discountPercentage: 0, // TODO: This should come from backend
             status: deal.status as 'active' | 'expired' | 'draft',
             startDate: deal.startDate,
             endDate: deal.endDate,

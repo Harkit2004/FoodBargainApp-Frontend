@@ -87,7 +87,6 @@ class DealsService {
         // If request failed (e.g. network error), try to fallback to cache
         const cachedData = cache.get<{ deals: Deal[]; pagination: Pagination }>(cacheKey);
         if (cachedData) {
-          console.log('Serving deals from cache due to API error');
           return {
             success: true,
             data: cachedData
@@ -100,7 +99,6 @@ class DealsService {
       // If unexpected error, try cache
       const cachedData = cache.get<{ deals: Deal[]; pagination: Pagination }>(cacheKey);
       if (cachedData) {
-        console.log('Serving deals from cache due to exception');
         return {
           success: true,
           data: cachedData

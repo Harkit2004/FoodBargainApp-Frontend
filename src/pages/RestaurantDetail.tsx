@@ -58,7 +58,6 @@ export const RestaurantDetail: React.FC = () => {
       const response = await restaurantService.getRestaurant(parseInt(id), token || undefined);
       
       if (response.success && response.data) {
-        console.log(response.data);
         setRestaurant(response.data.restaurant);
         setActiveDeals(response.data.activeDeals);
       } else {
@@ -266,15 +265,12 @@ export const RestaurantDetail: React.FC = () => {
     // Store the selected item before it gets cleared
     const itemToRefresh = selectedMenuItem;
     
-    console.log('Rating submitted callback - item:', itemToRefresh);
-    
     // Reload restaurant data to get updated rating
     loadRestaurant();
     loadUserRating();
     
     // Reload menu item ratings if a menu item was rated
     if (itemToRefresh) {
-      console.log('Refreshing ratings for item:', itemToRefresh.id);
       await loadMenuItemRatings([itemToRefresh.id]);
     }
     

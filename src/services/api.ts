@@ -41,23 +41,9 @@ class ApiService {
       }
     };
 
-    console.log('API Request:', {
-      url,
-      method: config.method || 'GET',
-      hasToken: !!token,
-      headers: config.headers
-    });
-
     try {
       const response = await fetch(url, config);
       const data = await response.json();
-      
-      console.log('API Response:', {
-        url,
-        status: response.status,
-        success: response.ok,
-        data
-      });
       
       if (!response.ok) {
         return {

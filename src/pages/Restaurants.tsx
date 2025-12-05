@@ -28,11 +28,9 @@ export const Restaurants: React.FC = () => {
     try {
       setIsLoading(true);
       const token = await getToken();
-      console.log('Loading restaurants with token:', !!token);
       const response = await restaurantService.searchRestaurants({ limit: 20 }, token || undefined);
       
       if (response.success && response.data) {
-        console.log('Restaurants loaded:', response.data.restaurants.map(r => ({ id: r.id, name: r.name, isBookmarked: r.isBookmarked })));
         setRestaurants(response.data.restaurants);
       }
     } catch (error) {
@@ -73,20 +71,16 @@ export const Restaurants: React.FC = () => {
   }, []);
 
   const toggleBookmark = async (restaurantId: number, currentStatus: boolean) => {
-    console.log('Toggle bookmark called:', { restaurantId, currentStatus });
     try {
       const token = await getToken();
-      console.log('Token obtained:', !!token);
       
       if (currentStatus) {
-        console.log('Unbookmarking restaurant...');
         await restaurantService.unbookmarkRestaurant(restaurantId, token || undefined);
         toast({
           title: "Removed from favorites",
           description: "Restaurant removed from your favorites.",
         });
       } else {
-        console.log('Bookmarking restaurant...');
         await restaurantService.bookmarkRestaurant(restaurantId, true, token || undefined);
         toast({
           title: "Added to favorites",

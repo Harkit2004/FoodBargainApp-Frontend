@@ -45,7 +45,6 @@ export const Home: React.FC = () => {
       // Try to load from cache first for instant display
       const cachedData = dealsService.getCachedDeals({ status: 'active' });
       if (cachedData) {
-        console.log('Loaded deals from cache');
         setDeals(cachedData.deals);
         setIsLoading(false); // Don't show full page loader if we have content
       } else {
@@ -56,9 +55,6 @@ export const Home: React.FC = () => {
       const response = await dealsService.getDeals({ status: 'active' }, token || undefined);
       
       if (response.success && response.data) {
-        console.log('Deals loaded:', response.data.deals.length, 'deals');
-        console.log('First deal bookmark status:', response.data.deals[0]?.isBookmarked);
-        console.log('Sample deal structure:', Object.keys(response.data.deals[0] || {}));
         setDeals(response.data.deals);
       }
     } catch (error) {
@@ -118,13 +114,10 @@ export const Home: React.FC = () => {
   }, []);
 
   const toggleFavorite = async (dealId: number, currentStatus: boolean) => {
-    console.log('Home toggle favorite called:', { dealId, currentStatus });
     try {
       const token = await getToken();
-      console.log('Token obtained:', !!token);
       
       if (currentStatus) {
-        console.log('Unfavoriting deal...');
         await dealsService.unfavoriteDeal(dealId, token || undefined);
         toast({
           title: "Removed from favorites",

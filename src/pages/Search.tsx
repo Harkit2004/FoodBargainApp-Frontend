@@ -369,35 +369,26 @@ export const Search: React.FC = () => {
   };
 
   const handleBookmarkToggle = async (id: number) => {
-    console.log('Search bookmark toggle called:', id);
     const result = searchResults.find(r => r.id === id);
     if (!result) {
-      console.log('No result found for id:', id);
       return;
     }
 
-    console.log('Found result:', result.type, result.title, 'current bookmark status:', result.isBookmarked);
-
     try {
       const token = await getToken();
-      console.log('Token obtained:', !!token);
       
       const isCurrentlyBookmarked = result.isBookmarked === true;
       
       if (result.type === 'restaurant') {
         if (isCurrentlyBookmarked) {
-          console.log('Unbookmarking restaurant...');
           await restaurantService.unbookmarkRestaurant(id, token || undefined);
         } else {
-          console.log('Bookmarking restaurant...');
           await restaurantService.bookmarkRestaurant(id, true, token || undefined);
         }
       } else if (result.type === 'deal') {
         if (isCurrentlyBookmarked) {
-          console.log('Unfavoriting deal...');
           await dealsService.unfavoriteDeal(id, token || undefined);
         } else {
-          console.log('Favoriting deal...');
           await dealsService.favoriteDeal(id, token || undefined);
         }
       }
@@ -523,12 +514,10 @@ export const Search: React.FC = () => {
             </h2>
             <FilterSheet
               filters={filters}
-              onFiltersChange={(newFilters) => {
-                console.log('Search: Filters changed to:', newFilters);
+              onFilterChange={(newFilters) => {
                 setFilters(newFilters);
               }}
               onApply={(appliedFilters) => {
-                console.log('Search: Apply clicked with filters:', appliedFilters);
                 performSearch(searchQuery, appliedFilters);
               }}
             />

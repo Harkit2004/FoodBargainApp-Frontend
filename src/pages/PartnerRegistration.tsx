@@ -40,7 +40,6 @@ const InputField: React.FC<{
   onChange: (field: keyof PartnerFormData, value: string) => void;
 }> = ({ label, field, placeholder, icon, type = 'text', required = false, formData, errors, onChange }) => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    console.log(`Input change for ${field}:`, e.target.value); // Debug log
     onChange(field, e.target.value);
   };
 
@@ -92,20 +91,12 @@ export const PartnerRegistration: React.FC = () => {
 
   const [errors, setErrors] = useState<Partial<PartnerFormData>>({});
 
-  // Debug: Log initial form data
-  React.useEffect(() => {
-    console.log('Initial form data:', formData);
-  }, [formData]);
-
   const handleInputChange = (field: keyof PartnerFormData, value: string) => {
-    console.log(`Updating ${field} with value:`, value); // Debug log
-    
     setFormData(prev => {
       const newData = {
         ...prev,
         [field]: value
       };
-      console.log('Updated form data:', newData); // Debug log
       return newData;
     });
     
@@ -265,7 +256,6 @@ export const PartnerRegistration: React.FC = () => {
                       placeholder="Describe your restaurant, cuisine type, and what makes you special..."
                       value={formData.description || ''}
                       onChange={(e) => {
-                        console.log('Description change:', e.target.value); // Debug log
                         handleInputChange('description', e.target.value);
                       }}
                       rows={3}
@@ -321,7 +311,6 @@ export const PartnerRegistration: React.FC = () => {
                         name="province"
                         value={formData.province || 'ON'}
                         onChange={(e) => {
-                          console.log('Province change:', e.target.value); // Debug log
                           handleInputChange('province', e.target.value);
                         }}
                         className={`w-full px-3 py-2 border border-input bg-background rounded-md text-sm ${errors.province ? 'border-red-500' : ''}`}
@@ -378,30 +367,6 @@ export const PartnerRegistration: React.FC = () => {
                     onChange={handleInputChange}
                   />
                 </div>
-              </div>
-
-              {/* Debug Section - Remove this after testing */}
-              <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 shadow-custom-sm">
-                <h3 className="text-sm font-semibold text-yellow-800 mb-2">Debug Info (Remove after testing)</h3>
-                <div className="text-xs text-yellow-700 space-y-1">
-                  <p><strong>Business Name:</strong> "{formData.businessName || 'empty'}"</p>
-                  <p><strong>Description:</strong> "{formData.description || 'empty'}"</p>
-                  <p><strong>Street Address:</strong> "{formData.streetAddress || 'empty'}"</p>
-                  <p><strong>City:</strong> "{formData.city || 'empty'}"</p>
-                  <p><strong>Province:</strong> "{formData.province || 'empty'}"</p>
-                  <p><strong>Phone:</strong> "{formData.phone || 'empty'}"</p>
-                </div>
-                <Button
-                  onClick={() => {
-                    console.log('Current form data:', formData);
-                    alert(`Business Name: "${formData.businessName}"`);
-                  }}
-                  variant="outline"
-                  size="sm"
-                  className="mt-2"
-                >
-                  Test Form State
-                </Button>
               </div>
 
               {/* Terms */}
