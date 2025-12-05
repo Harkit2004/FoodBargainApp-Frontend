@@ -16,18 +16,21 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useAuth } from '@clerk/clerk-react';
+import { useAuth as useClerkAuth } from '@clerk/clerk-react';
+import { useAuth } from '@/contexts/AuthContext';
 import { restaurantService, Restaurant, MenuSection, MenuItem, Deal } from '@/services/restaurantService';
 import { ratingService, MyRating } from '@/services/ratingService';
 import { StarRating } from '@/components/ui/star-rating';
 import { RatingDialog } from '@/components/RatingDialog';
 import { RatingsView } from '@/components/RatingsView';
+import { openMapNavigation, formatAddress } from '@/utils/locationUtils';
 import heroImage from '@/assets/hero-food.jpg';
 
 export const RestaurantDetail: React.FC = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { getToken } = useAuth();
+  const { getToken } = useClerkAuth();
+  const { user } = useAuth();
   const { id } = useParams<{ id: string }>();
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [activeDeals, setActiveDeals] = useState<Deal[]>([]);
@@ -414,7 +417,7 @@ export const RestaurantDetail: React.FC = () => {
               </div>
 
               {/* Rating Actions */}
-              <div className="flex gap-2 mb-3">
+              <div className="flex gap-2 mb-3 flex-wrap">
                 <Button
                   variant="outline"
                   size="sm"
@@ -436,14 +439,56 @@ export const RestaurantDetail: React.FC = () => {
                     View Reviews ({restaurant.ratingCount})
                   </Button>
                 )}
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                      const success = openMapNavigation(
+                        restaurant.latitude, 
+                        restaurant.longitude, 
+                        [restaurant.streetAddress, restaurant.city, restaurant.province],
+                        user?.location
+                      );
+                      if (!success) {
+                        toast({
+                          title: "Address not available",
+                          description: "Could not find location for this restaurant.",
+                          variant: "destructive",
+                        });
+                      }
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <MapPin className="w-4 h-4" />
+                  Directions
+                </Button>
               </div>
               
               <div className="space-y-2">
                 {(restaurant.streetAddress || restaurant.city) && (
-                  <div className="flex items-center gap-2 text-sm text-gray-300">
+                  <div 
+                    className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer hover:text-primary transition-colors"
+                    onClick={() => {
+                      const success = openMapNavigation(
+                        restaurant.latitude, 
+                        restaurant.longitude, 
+                        [restaurant.streetAddress, restaurant.city, restaurant.province],
+                        user?.location
+                      );
+                      if (!success) {
+                        toast({
+                          title: "Address not available",
+                          description: "Could not find location for this restaurant.",
+                          variant: "destructive",
+                        });
+                      }
+                    }}
+                    title="Get Directions"
+                  >
                     <MapPin className="w-4 h-4" />
                     <span>
-                      {[restaurant.streetAddress, restaurant.city].filter(Boolean).join(', ')}
+                      {formatAddress(restaurant.streetAddress, restaurant.city, restaurant.province)}
                     </span>
                   </div>
                 )}

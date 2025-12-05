@@ -14,44 +14,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@clerk/clerk-react';
 import { restaurantService, Restaurant } from '@/services/restaurantService';
+import { RestaurantCard } from '@/components/RestaurantCard';
 import heroImage from '@/assets/hero-food.jpg';
-
-const INVALID_LOCATION_VALUES = new Set([
-  '',
-  'unknown',
-  'unknown 0',
-  '0',
-  'n/a',
-  'na',
-  'null',
-  'none',
-  'not available',
-]);
-
-const sanitizeLocationPart = (value?: string | null): string | null => {
-  if (!value) return null;
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  const normalized = trimmed.toLowerCase();
-  if (INVALID_LOCATION_VALUES.has(normalized)) {
-    return null;
-  }
-  return trimmed;
-};
-
-const buildLocationLabel = (restaurant: Restaurant): string => {
-  const streetAddress = sanitizeLocationPart(restaurant.streetAddress);
-  const city = sanitizeLocationPart(restaurant.city);
-  const province = sanitizeLocationPart(restaurant.province);
-
-  const locationParts = [streetAddress, city, province].filter(Boolean) as string[];
-
-  if (locationParts.length > 0) {
-    return locationParts.join(', ');
-  }
-
-  return 'Toronto, ON';
-};
 
 export const Restaurants: React.FC = () => {
   const { toast } = useToast();
@@ -157,139 +121,6 @@ export const Restaurants: React.FC = () => {
     }
   };
 
-  const formatTime12Hour = (time24: string): string => {
-    const [hour, minute] = time24.split(':').map(Number);
-    const period = hour >= 12 ? 'p.m.' : 'a.m.';
-    const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-    return `${hour12}:${minute.toString().padStart(2, '0')} ${period}`;
-  };
-
-  const getHoursStatus = (openingTime?: string, closingTime?: string) => {
-    if (!openingTime || !closingTime) return { status: 'Unknown', color: 'text-gray-400' };
-    
-    const now = new Date();
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
-    const currentTime = currentHour * 60 + currentMinute;
-    
-    const [openHour, openMinute] = openingTime.split(':').map(Number);
-    const [closeHour, closeMinute] = closingTime.split(':').map(Number);
-    const openTime = openHour * 60 + openMinute;
-    const closeTime = closeHour * 60 + closeMinute;
-    
-    if (currentTime >= openTime && currentTime <= closeTime) {
-      return { status: 'Open', color: 'text-green-400' };
-    } else {
-      return { status: 'Closed', color: 'text-red-400' };
-    }
-  };
-
-  const RestaurantCard: React.FC<{ restaurant: Restaurant }> = ({ restaurant }) => {
-    const hoursStatus = getHoursStatus(restaurant.openingTime, restaurant.closingTime);
-    const coverImage = restaurant.imageUrl?.trim() ? restaurant.imageUrl : heroImage;
-    
-    return (
-      <div className="bg-gray-800 rounded-2xl shadow-xl overflow-hidden mb-4 border border-gray-700">
-        <div className="relative">
-          <img 
-            src={coverImage}
-            alt={restaurant.name}
-            className="w-full h-48 object-cover"
-          />
-          <button
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              const isCurrentlyBookmarked = restaurant.isBookmarked === true;
-              console.log('Heart button clicked!', restaurant.id, 'isBookmarked:', restaurant.isBookmarked, 'treated as:', isCurrentlyBookmarked);
-              toggleBookmark(restaurant.id, isCurrentlyBookmarked);
-            }}
-            className="absolute top-3 right-3 p-2 bg-black/50 rounded-full hover:bg-black/70 transition-colors backdrop-blur-sm"
-          >
-            <Heart 
-              className={`w-5 h-5 ${restaurant.isBookmarked === true ? 'fill-red-500 text-red-500' : 'text-white'}`} 
-            />
-          </button>
-        </div>
-        
-        <div className="p-4">
-          <div className="flex items-start justify-between mb-2">
-            <div className="flex-1">
-              <h3 className="font-bold text-lg text-white">{restaurant.name}</h3>
-              <p className="text-gray-300 text-sm">{restaurant.description || 'Delicious food awaits!'}</p>
-            </div>
-            {restaurant.ratingAvg && restaurant.ratingCount && restaurant.ratingCount > 0 ? (
-              <div className="flex items-center gap-1 ml-2">
-                <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                <span className="text-sm font-medium text-white">
-                  {parseFloat(restaurant.ratingAvg.toString()).toFixed(1)}
-                </span>
-                <span className="text-xs text-gray-400">
-                  ({restaurant.ratingCount})
-                </span>
-              </div>
-            ) : (
-              <div className="text-xs text-gray-400 ml-2">
-                No ratings yet
-              </div>
-            )}
-          </div>
-          
-          <div className="space-y-2 mb-4">
-            <div className="flex items-center gap-2 text-sm text-gray-300">
-              <MapPin className="w-4 h-4" />
-              <span>{buildLocationLabel(restaurant)}</span>
-            </div>
-            
-            {restaurant.phone && (
-              <div className="flex items-center gap-2 text-sm text-gray-300">
-                <Phone className="w-4 h-4" />
-                <span>{restaurant.phone}</span>
-              </div>
-            )}
-            
-            <div className="flex items-center gap-2 text-sm">
-              <Clock className="w-4 h-4 text-gray-400" />
-              <span className={hoursStatus.color}>
-                {hoursStatus.status}
-              </span>
-              {restaurant.openingTime && restaurant.closingTime && (
-                <span className="text-gray-400">
-                  • {formatTime12Hour(restaurant.openingTime)} - {formatTime12Hour(restaurant.closingTime)}
-                </span>
-              )}
-            </div>
-          </div>
-          
-          <div className="flex gap-2">
-            <Button 
-              variant="neon" 
-              size="sm" 
-              className="flex-1"
-              onClick={() => navigate(`/restaurants/${restaurant.id}`)}
-            >
-              View Menu
-              <ArrowRight className="w-4 h-4 ml-1" />
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="border-gray-600 text-gray-300 hover:bg-gray-700"
-              onClick={() => {
-                toast({
-                  title: "Directions",
-                  description: `Opening directions to ${restaurant.name}`,
-                });
-              }}
-            >
-              <MapPin className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex justify-center">
       <div className="w-full max-w-md mx-auto">
@@ -314,7 +145,11 @@ export const Restaurants: React.FC = () => {
                 <div>
                   {restaurants.length > 0 ? (
                     restaurants.map((restaurant) => (
-                      <RestaurantCard key={restaurant.id} restaurant={restaurant} />
+                      <RestaurantCard 
+                        key={restaurant.id} 
+                        restaurant={restaurant} 
+                        onToggleFavorite={toggleBookmark}
+                      />
                     ))
                   ) : (
                     <div className="text-center py-8">

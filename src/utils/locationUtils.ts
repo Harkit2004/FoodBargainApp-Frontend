@@ -123,3 +123,75 @@ export const getLocationCoordinates = (locationData: LocationData): Coordinates 
   }
   return null;
 };
+
+/**
+ * Opens the native map application or Google Maps in a new tab with directions to the specified location.
+ * Prioritizes coordinates if available, otherwise falls back to address.
+ * Can optionally specify an origin address.
+ */
+export const openMapNavigation = (
+  latitude?: number | string,
+  longitude?: number | string,
+  addressParts?: (string | undefined | null)[],
+  origin?: string
+): boolean => {
+  let destination = '';
+
+  if (latitude && longitude) {
+    destination = `${latitude},${longitude}`;
+  } else if (addressParts && addressParts.length > 0) {
+    const validParts = addressParts.filter(Boolean);
+    if (validParts.length > 0) {
+      destination = encodeURIComponent(validParts.join(', '));
+    }
+  }
+
+  if (destination) {
+    let url = `https://www.google.com/maps/dir/?api=1&destination=${destination}`;
+    if (origin) {
+      url += `&origin=${encodeURIComponent(origin)}`;
+    }
+    window.open(url, '_blank');
+    return true;
+  }
+  
+  return false;
+};
+
+/**
+ * Formats a restaurant address for display.
+ * Handles various edge cases and missing data.
+ */
+export const formatAddress = (
+  streetAddress?: string,
+  city?: string,
+  province?: string
+): string => {
+  const cleanCity = city?.trim();
+  const cleanProvince = province?.trim();
+  const cleanStreet = streetAddress?.trim();
+
+  const isValid = (val?: string) => 
+    val && 
+    val !== '' && 
+    val.toLowerCase() !== 'unknown' && 
+    val.toLowerCase() !== 'location not set' && 
+    val.toLowerCase() !== 'null';
+
+  const hasValidCity = isValid(cleanCity);
+  const hasValidProvince = isValid(cleanProvince);
+  const hasValidAddress = isValid(cleanStreet);
+  
+  if (hasValidAddress) {
+    return cleanStreet!;
+  } else if (hasValidCity && hasValidProvince) {
+    return `${cleanCity}, ${cleanProvince}`;
+  } else if (hasValidCity) {
+    return cleanCity!;
+  } else if (hasValidProvince) {
+    return cleanProvince!;
+  } else {
+    return 'Unknown';
+  }
+};
+

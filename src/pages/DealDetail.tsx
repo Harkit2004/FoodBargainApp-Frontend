@@ -21,6 +21,7 @@ import {
 import { useNavigate, useParams } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth as useClerkAuth } from '@clerk/clerk-react';
+import { useAuth } from '@/contexts/AuthContext';
 import { dealsService, Deal } from '@/services/dealsService';
 import { partnerService } from '@/services/partnerService';
 import { ratingService, MyRating } from '@/services/ratingService';
@@ -29,6 +30,7 @@ import { formatDateLong } from '@/utils/dateUtils';
 import heroImage from '@/assets/hero-food.jpg';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { openMapNavigation, formatAddress } from '@/utils/locationUtils';
 
 // Using the Deal interface from dealsService
 
@@ -37,6 +39,7 @@ export const DealDetail: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { getToken, isSignedIn } = useClerkAuth();
+  const { user } = useAuth();
   const [deal, setDeal] = useState<Deal | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [ratingDialogOpen, setRatingDialogOpen] = useState(false);
@@ -48,6 +51,22 @@ export const DealDetail: React.FC = () => {
   const [isSubmittingReport, setIsSubmittingReport] = useState(false);
   const [isCheckingReport, setIsCheckingReport] = useState(true);
   const [reportStatus, setReportStatus] = useState<{ hasReported: boolean; createdAt: string | null; jiraTicketId: string | null } | null>(null);
+
+  const handleOpenNavigation = () => {
+    if (!deal?.restaurant) return;
+    
+    const { latitude, longitude, streetAddress, city, province } = deal.restaurant;
+    
+    const success = openMapNavigation(latitude, longitude, [streetAddress, city, province], user?.location);
+    
+    if (!success) {
+       toast({
+        title: "Address not available",
+        description: "Could not find location for this restaurant.",
+        variant: "destructive",
+      });
+    }
+  };
 
   useEffect(() => {
     const fetchDeal = async () => {
@@ -480,12 +499,14 @@ export const DealDetail: React.FC = () => {
                 </div>
                 
                 <div className="space-y-2 text-sm">
-                  <div className="flex items-center gap-2 text-muted-foreground">
+                  <div 
+                    className="flex items-center gap-2 text-muted-foreground cursor-pointer hover:text-primary transition-colors"
+                    onClick={handleOpenNavigation}
+                    title="Get Directions"
+                  >
                     <MapPin className="w-4 h-4" />
                     <span>
-                      {[deal.restaurant.streetAddress, deal.restaurant.city, deal.restaurant.province]
-                        .filter(Boolean)
-                        .join(', ') || 'Address not available'}
+                      {formatAddress(deal.restaurant.streetAddress, deal.restaurant.city, deal.restaurant.province)}
                     </span>
                   </div>
                 </div>

@@ -21,6 +21,8 @@ import { useAuth as useAppAuth } from '@/contexts/AuthContext';
 import { restaurantService, Restaurant } from '@/services/restaurantService';
 import { dealsService, Deal } from '@/services/dealsService';
 import { searchService, type SearchRequest } from '@/services/searchService';
+import { DealCard } from '@/components/DealCard';
+import { RestaurantCard } from '@/components/RestaurantCard';
 import { 
   getCurrentLocation, 
   calculateDistance, 
@@ -344,6 +346,28 @@ export const Search: React.FC = () => {
     }
   }, [userLocation, performSearch]);
 
+  const handleShare = async (deal: Deal, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: deal.title,
+          text: `Check out this deal at ${deal.restaurant.name}: ${deal.title}`,
+          url: window.location.href,
+        });
+      } catch (error) {
+        console.log('Error sharing:', error);
+      }
+    } else {
+      // Fallback to clipboard
+      navigator.clipboard.writeText(window.location.href);
+      toast({
+        title: "Link copied",
+        description: "Deal link copied to clipboard",
+      });
+    }
+  };
+
   const handleBookmarkToggle = async (id: number) => {
     console.log('Search bookmark toggle called:', id);
     const result = searchResults.find(r => r.id === id);
@@ -452,155 +476,6 @@ export const Search: React.FC = () => {
     [getToken, toast]
   );
 
-  const ResultCard: React.FC<{ result: SearchResult }> = ({ result }) => (
-    <div className="bg-card rounded-xl shadow-custom-sm overflow-hidden mb-4">
-      <div className="relative">
-        <img 
-          src={result.imageUrl} 
-          alt={result.title}
-          className="w-full h-40 object-cover"
-        />
-        {result.type === 'deal' && result.discount && (
-          <div className="absolute top-3 left-3">
-            <span className="bg-primary text-primary-foreground px-2 py-1 rounded-full text-sm font-bold">
-              {result.discount}% OFF
-            </span>
-          </div>
-        )}
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            const isCurrentlyBookmarked = result.isBookmarked === true;
-            console.log('Search heart button clicked!', result.id, result.type, 'isBookmarked:', result.isBookmarked, 'treated as:', isCurrentlyBookmarked);
-            handleBookmarkToggle(result.id);
-          }}
-          className="absolute top-3 right-3 p-2 bg-background/80 rounded-full hover:bg-background transition-colors"
-        >
-          <Heart 
-            className={`w-5 h-5 ${result.isBookmarked === true ? 'fill-red-500 text-red-500' : 'text-muted-foreground'}`} 
-          />
-        </button>
-      </div>
-      
-      <div className="p-4">
-        <div className="flex items-start justify-between mb-2">
-          <div className="flex-1">
-            <h3 className="font-bold text-lg">{result.title}</h3>
-            <p className="text-muted-foreground">{result.subtitle}</p>
-          </div>
-          {result.type === 'deal' && result.price && (
-            <div className="text-right">
-              <p className="text-lg font-bold text-primary">{result.price}</p>
-              <span className="text-xs text-muted-foreground">from</span>
-            </div>
-          )}
-        </div>
-        
-        <p className="text-sm text-muted-foreground mb-3">{result.description}</p>
-        
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-4">
-            {result.rating && (
-              <div className="flex items-center gap-1">
-                <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                <span className="text-sm font-medium">{result.rating}</span>
-              </div>
-            )}
-            <div className="flex items-center gap-1 text-sm text-muted-foreground">
-              <MapPin className="w-4 h-4" />
-              <span>{result.distance}</span>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-1 text-sm text-muted-foreground">
-            {result.type === 'deal' ? (
-              <>
-                <DollarSign className="w-4 h-4" />
-                <span>Deal</span>
-              </>
-            ) : (
-              <>
-                <Utensils className="w-4 h-4" />
-                <span>Restaurant</span>
-              </>
-            )}
-          </div>
-        </div>
-        
-        {/* Cuisine and Dietary Tags */}
-        {(result.cuisines && result.cuisines.length > 0) ||
-        (result.dietaryPreferences && result.dietaryPreferences.length > 0) ? (
-          <div className="flex flex-wrap gap-1.5 mb-3">
-            {result.cuisines?.map((cuisine) => (
-              <span
-                key={`cuisine-${cuisine.id}`}
-                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-500/20 text-purple-300 border border-purple-500/30"
-              >
-                {cuisine.name}
-              </span>
-            ))}
-            {result.dietaryPreferences?.map((dietary) => (
-              <span
-                key={`dietary-${dietary.id}`}
-                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-500/20 text-green-300 border border-green-500/30"
-              >
-                {dietary.name}
-              </span>
-            ))}
-          </div>
-        ) : null}
-        
-        <div className="flex flex-wrap gap-1 mb-3">
-          {result.tags.map((tag, index) => (
-            <span
-              key={index}
-              className="px-2 py-1 bg-muted text-muted-foreground text-xs rounded-full"
-            >
-              {tag}
-            </span>
-          ))}
-        </div>
-        
-        <Button 
-          variant="default" 
-          size="sm" 
-          className="w-full"
-          onClick={() => {
-            if (result.type === 'deal') {
-              navigate(`/deals/${result.id}`);
-            } else {
-              navigate(`/restaurants/${result.id}`);
-            }
-          }}
-        >
-          {result.type === 'deal' ? 'View Deal' : 'View Restaurant'}
-        </Button>
-
-        {result.type === 'deal' && user?.isAdmin && (
-          <Button
-            variant="destructive"
-            size="sm"
-            className="w-full mt-2"
-            disabled={deletingDealId === result.id}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              handleAdminDelete(result);
-            }}
-          >
-            {deletingDealId === result.id ? (
-              <Loader2 className="w-4 h-4 animate-spin mr-2" />
-            ) : (
-              <Trash2 className="w-4 h-4 mr-2" />
-            )}
-            Remove deal everywhere
-          </Button>
-        )}
-      </div>
-    </div>
-  );
-
   return (
     <div className="min-h-screen bg-background flex justify-center">
       <div className="w-full max-w-md mx-auto">
@@ -667,7 +542,23 @@ export const Search: React.FC = () => {
             </div>
           ) : (
             searchResults.map((result) => (
-              <ResultCard key={`${result.type}-${result.id}`} result={result} />
+              result.type === 'deal' ? (
+                <DealCard 
+                  key={`deal-${result.id}`}
+                  deal={result.originalData as Deal}
+                  isAdmin={user?.isAdmin}
+                  onToggleFavorite={(id) => handleBookmarkToggle(id)}
+                  onShare={handleShare}
+                  onDelete={() => handleAdminDelete(result)}
+                  isDeleting={deletingDealId === result.id}
+                />
+              ) : (
+                <RestaurantCard 
+                  key={`restaurant-${result.id}`}
+                  restaurant={result.originalData as Restaurant}
+                  onToggleFavorite={(id) => handleBookmarkToggle(id)}
+                />
+              )
             ))
           )}
           </div>

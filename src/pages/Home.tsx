@@ -10,6 +10,7 @@ import { dealsService, Deal as ApiDeal } from '@/services/dealsService';
 import { useNavigate } from 'react-router-dom';
 import { formatDateShort } from '@/utils/dateUtils';
 import heroImage from '@/assets/hero-food.jpg';
+import { DealCard } from '@/components/DealCard';
 
 // Helper function to format location - returns lat,lng for coordinates
 const formatLocation = (locationString: string): string => {
@@ -311,161 +312,6 @@ export const Home: React.FC = () => {
     );
   }
 
-  const DealCard: React.FC<{ deal: ApiDeal }> = ({ deal }) => (
-    <div 
-      className="bg-gray-800 rounded-2xl shadow-xl overflow-hidden mb-4 border border-gray-700 cursor-pointer hover:border-gray-600 transition-colors"
-      onClick={() => navigate(`/deals/${deal.id}`)}
-    >
-      <div className="relative">
-        <img 
-          src={heroImage} 
-          alt={deal.title}
-          className="w-full h-48 object-cover"
-        />
-        <div className="absolute top-3 left-3">
-          <span className="bg-blue-500 text-white px-2 py-1 rounded-full text-sm font-bold shadow-lg">
-            DEAL
-          </span>
-        </div>
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            const isCurrentlyBookmarked = deal.isBookmarked === true;
-            console.log('Home heart button clicked!', deal.id, 'isBookmarked:', deal.isBookmarked, 'treated as:', isCurrentlyBookmarked);
-            toggleFavorite(deal.id, isCurrentlyBookmarked);
-          }}
-          className="absolute top-3 right-3 p-2 bg-black/50 rounded-full hover:bg-black/70 transition-colors backdrop-blur-sm"
-        >
-          <Heart 
-            className={`w-5 h-5 ${deal.isBookmarked === true ? 'fill-red-500 text-red-500' : 'text-white'}`} 
-          />
-        </button>
-      </div>
-      
-      <div className="p-4">
-        <h3 className="font-bold text-lg mb-2 text-white">{deal.title}</h3>
-        <p className="text-gray-300 text-sm mb-3">{deal.description || 'Great deal available!'}</p>
-        
-        {/* Cuisine and Dietary Tags */}
-        {((deal.cuisines && deal.cuisines.length > 0) || (deal.dietaryPreferences && deal.dietaryPreferences.length > 0)) && (
-          <div className="flex flex-wrap gap-1.5 mb-3">
-            {deal.cuisines?.map((cuisine) => (
-              <span
-                key={`cuisine-${cuisine.id}`}
-                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-500/20 text-purple-300 border border-purple-500/30"
-              >
-                {cuisine.name}
-              </span>
-            ))}
-            {deal.dietaryPreferences?.map((dietary) => (
-              <span
-                key={`dietary-${dietary.id}`}
-                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-500/20 text-green-300 border border-green-500/30"
-              >
-                {dietary.name}
-              </span>
-            ))}
-          </div>
-        )}
-        
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <p className="font-semibold text-white">{deal.restaurant.name}</p>
-            <div className="flex items-center gap-1 text-sm text-gray-400">
-              <MapPin className="w-4 h-4" />
-              <span>
-                {(() => {
-                  const city = deal.restaurant.city?.trim();
-                  const province = deal.restaurant.province?.trim();
-                  const streetAddress = deal.restaurant.streetAddress?.trim();
-
-                  // Handle cases where city/province might be empty strings or placeholder values
-                  const hasValidCity = city && city !== '' && city.toLowerCase() !== 'unknown' && city.toLowerCase() !== 'location not set' && city.toLowerCase() !== 'null';
-                  const hasValidProvince = province && province !== '' && province.toLowerCase() !== 'unknown' && province.toLowerCase() !== 'location not set' && province.toLowerCase() !== 'null';
-                  const hasValidAddress = streetAddress && streetAddress !== '' && streetAddress.toLowerCase() !== 'unknown' && streetAddress.toLowerCase() !== 'null';
-                  
-                  if (hasValidAddress) {
-                    return streetAddress;
-                  } else if (hasValidCity && hasValidProvince) {
-                    return `${city}, ${province}`;
-                  } else if (hasValidCity) {
-                    return city;
-                  } else if (hasValidProvince) {
-                    return province;
-                  } else {
-                    return 'Unknown';
-                  }
-                })()}
-              </span>
-            </div>
-          </div>
-          <div className="text-right">
-            <p className="text-lg font-bold text-green-400">Active</p>
-            <p className="text-sm text-gray-400">{deal.status}</p>
-          </div>
-        </div>
-        
-        <div className="flex gap-2">
-          <Button 
-            variant="neon" 
-            size="sm" 
-            className="flex-1"
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/deals/${deal.id}`);
-            }}
-          >
-            View Deal
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="border-gray-600 text-gray-300 hover:bg-gray-700"
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/restaurants/${deal.restaurant.id}`);
-            }}
-          >
-            <MapPin className="w-4 h-4" />
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="border-gray-600 text-gray-300 hover:bg-gray-700"
-            onClick={(e) => handleShare(deal, e)}
-          >
-            <Share2 className="w-4 h-4" />
-          </Button>
-        </div>
-
-        {user?.isAdmin && (
-          <Button
-            variant="destructive"
-            size="sm"
-            className="w-full mt-3"
-            disabled={deletingDealId === deal.id}
-            onClick={(e) => {
-              e.stopPropagation();
-              handleAdminDelete(deal);
-            }}
-          >
-            {deletingDealId === deal.id ? (
-              <Loader2 className="w-4 h-4 animate-spin mr-2" />
-            ) : (
-              <Trash2 className="w-4 h-4 mr-2" />
-            )}
-            Remove deal everywhere
-          </Button>
-        )}
-        
-        <p className="text-xs text-gray-400 mt-2 text-center">
-          Expires: {formatDateShort(deal.endDate)}
-        </p>
-      </div>
-    </div>
-  );
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex justify-center">
       <div className="w-full max-w-md mx-auto">
@@ -536,7 +382,15 @@ export const Home: React.FC = () => {
                 <div>
                   {filteredDeals.length > 0 ? (
                     filteredDeals.map((deal) => (
-                      <DealCard key={deal.id} deal={deal} />
+                      <DealCard 
+                        key={deal.id} 
+                        deal={deal} 
+                        isAdmin={user?.isAdmin}
+                        onToggleFavorite={toggleFavorite}
+                        onShare={handleShare}
+                        onDelete={handleAdminDelete}
+                        isDeleting={deletingDealId === deal.id}
+                      />
                     ))
                   ) : (
                     <div className="text-center py-8">
