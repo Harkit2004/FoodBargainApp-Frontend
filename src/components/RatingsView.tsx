@@ -13,7 +13,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth as useClerkAuth } from '@clerk/clerk-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { ratingService, Rating, RatingAggregate } from '@/services/ratingService';
-import { Loader2, MessageSquare, User, Clock, Star, Flag, Trash2 } from 'lucide-react';
+import { tagService } from '@/services/tagService';
+import { Loader2, MessageSquare, User, Clock, Star, Flag, Trash2, X } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 interface RatingsViewProps {
@@ -133,6 +134,23 @@ export const RatingsView: React.FC<RatingsViewProps> = ({
     }
   };
 
+  const handleDeleteTag = async (tagId: number) => {
+    if (!confirm('Are you sure you want to delete this tag globally? This will remove it from all reviews.')) return;
+    try {
+      const token = await getToken();
+      const response = await tagService.deleteTag(tagId, token || '');
+      if (response.success) {
+        toast({ title: "Tag deleted", description: "Tag removed globally." });
+        loadRatings(currentPage); // Reload to refresh tags
+      } else {
+        toast({ title: "Error", description: response.error || "Failed to delete tag", variant: "destructive" });
+      }
+    } catch (error) {
+      console.error("Error deleting tag:", error);
+      toast({ title: "Error", description: "Failed to delete tag", variant: "destructive" });
+    }
+  };
+
   const getTargetTypeDisplay = () => {
     switch (targetType) {
       case 'restaurant':
@@ -219,6 +237,25 @@ export const RatingsView: React.FC<RatingsViewProps> = ({
                 )}
               </div>
             )}
+          </div>
+        )}
+
+        {rating.tags && rating.tags.length > 0 && (
+          <div className="flex flex-wrap gap-2 pl-10">
+            {rating.tags.map(tag => (
+              <Badge key={tag.id} variant="secondary" className="text-xs flex items-center gap-1">
+                {tag.name}
+                {isAdmin && (
+                  <button 
+                    className="hover:text-destructive transition-colors"
+                    onClick={(e) => { e.stopPropagation(); handleDeleteTag(tag.id); }}
+                    title="Delete Tag Globally"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </Badge>
+            ))}
           </div>
         )}
       </div>

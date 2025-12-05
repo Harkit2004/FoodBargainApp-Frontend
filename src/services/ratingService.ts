@@ -10,6 +10,11 @@ export interface Rating {
     id: string;
     displayName: string;
   };
+  tags?: Array<{
+    id: number;
+    name: string;
+    isCustom: boolean;
+  }>;
 }
 
 export interface RatingAggregate {
@@ -42,6 +47,11 @@ export interface MyRating {
   comment?: string;
   createdAt: string;
   updatedAt: string;
+  tags?: Array<{
+    id: number;
+    name: string;
+    isCustom: boolean;
+  }>;
 }
 
 export interface CreateRatingData {
@@ -49,11 +59,13 @@ export interface CreateRatingData {
   targetId: number;
   rating: number;
   comment?: string;
+  tags?: number[];
 }
 
 export interface UpdateRatingData {
   rating?: number;
   comment?: string;
+  tags?: number[];
 }
 
 class RatingService {

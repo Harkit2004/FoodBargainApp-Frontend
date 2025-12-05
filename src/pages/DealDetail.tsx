@@ -694,7 +694,8 @@ export const DealDetail: React.FC = () => {
           existingRating={userRating ? {
             id: userRating.id,
             rating: userRating.rating,
-            comment: userRating.comment || undefined
+            comment: userRating.comment || undefined,
+            tags: userRating.tags
           } : undefined}
           onRatingSubmitted={handleRatingSubmitted}
         />

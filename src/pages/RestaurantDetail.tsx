@@ -679,13 +679,15 @@ export const RestaurantDetail: React.FC = () => {
               ? {
                   id: userMenuItemRatings[selectedMenuItem.id].id,
                   rating: userMenuItemRatings[selectedMenuItem.id].rating,
-                  comment: userMenuItemRatings[selectedMenuItem.id].comment || undefined
+                  comment: userMenuItemRatings[selectedMenuItem.id].comment || undefined,
+                  tags: userMenuItemRatings[selectedMenuItem.id].tags
                 }
               : !selectedMenuItem && userRating
               ? {
                   id: userRating.id,
                   rating: userRating.rating,
-                  comment: userRating.comment || undefined
+                  comment: userRating.comment || undefined,
+                  tags: userRating.tags
                 }
               : undefined
           }
