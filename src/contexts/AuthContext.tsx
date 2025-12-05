@@ -75,11 +75,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const response = await apiService.post<{ user: User }>('/auth/login', {
         clerkUserId: clerkUser.id
       }, token);
+      const { isBanned, requiresRegistration } = response as {
+        isBanned?: boolean;
+        requiresRegistration?: boolean;
+      };
 
       if (response.success && response.data) {
         // User exists in backend, set user data
         setUser(response.data.user);
-      } else if (response.requiresRegistration) {
+      } else if (isBanned) {
+        // User is banned
+        setUser(null);
+        navigate('/banned');
+      } else if (requiresRegistration) {
         // User needs to complete registration in our backend
         setUser(null);
         navigate('/register', { 

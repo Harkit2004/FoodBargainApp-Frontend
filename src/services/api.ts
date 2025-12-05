@@ -62,7 +62,8 @@ class ApiService {
       if (!response.ok) {
         return {
           success: false,
-          error: data.error || data.message || `HTTP ${response.status}: ${response.statusText}`
+          error: data.error || data.message || `HTTP ${response.status}: ${response.statusText}`,
+          ...data // Include other fields like isBanned, requiresRegistration
         };
       }
 

@@ -1,6 +1,6 @@
 import React from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { ExternalLink, ShieldCheck, Home, ArrowLeft } from "lucide-react";
+import { ExternalLink, ShieldCheck, Home, ArrowLeft, Users } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const DEFAULT_JIRA_URL =
@@ -41,7 +41,7 @@ export const AdminConsole: React.FC = () => {
             </p>
           </header>
 
-          <div className="grid gap-6 sm:grid-cols-2">
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             <article className="rounded-3xl border border-sky-400/40 bg-sky-400/5 p-6 backdrop-blur flex flex-col gap-4">
               <div className="space-y-2">
                 <p className="text-sky-100 text-sm uppercase tracking-[0.2em]">Jira</p>
@@ -59,6 +59,22 @@ export const AdminConsole: React.FC = () => {
                 Open Jira dashboard <ExternalLink className="w-4 h-4" />
               </button>
               <p className="text-[11px] text-slate-400 break-all">{jiraDashboardUrl}</p>
+            </article>
+
+            <article className="rounded-3xl border border-purple-400/40 bg-purple-400/5 p-6 backdrop-blur flex flex-col gap-4">
+              <div className="space-y-2">
+                <p className="text-purple-100 text-sm uppercase tracking-[0.2em]">Users</p>
+                <h2 className="text-2xl font-semibold">User Management</h2>
+                <p className="text-slate-200 text-sm">
+                  View all registered users, manage their status, and handle bans or suspensions.
+                </p>
+              </div>
+              <Link
+                to="/admin/users"
+                className="mt-auto inline-flex items-center justify-center gap-2 rounded-2xl border border-purple-300/60 bg-purple-400/10 px-4 py-3 text-sm font-medium text-purple-50 hover:bg-purple-400/20 transition-colors"
+              >
+                Manage Users <Users className="w-4 h-4" />
+              </Link>
             </article>
 
             <article className="rounded-3xl border border-emerald-400/40 bg-emerald-400/5 p-6 backdrop-blur flex flex-col gap-4">
