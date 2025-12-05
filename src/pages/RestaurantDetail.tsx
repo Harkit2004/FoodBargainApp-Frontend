@@ -698,8 +698,15 @@ export const RestaurantDetail: React.FC = () => {
             setSelectedMenuItem(null);
           }}
           targetType={selectedMenuItem ? 'menu_item' : 'restaurant'}
-          targetId={selectedMenuItem ? selectedMenuItem.id : restaurant.id}
-          targetName={selectedMenuItem ? selectedMenuItem.name : restaurant.name}
+          targetId={selectedMenuItem ? selectedMenuItem.id : (restaurant?.id || 0)}
+          targetName={selectedMenuItem ? selectedMenuItem.name : (restaurant?.name || 'Restaurant')}
+          onRatingChange={() => {
+            if (selectedMenuItem) {
+               loadMenuItemRatings([selectedMenuItem.id]);
+            } else {
+               loadRestaurant();
+            }
+          }}
         />
       </div>
     </div>

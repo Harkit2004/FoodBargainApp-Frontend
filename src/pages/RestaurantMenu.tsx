@@ -39,45 +39,47 @@ export const RestaurantMenu: React.FC = () => {
 
   const restaurantIdNumber = restaurantId ? parseInt(restaurantId, 10) : null;
 
-  useEffect(() => {
-    const fetchRestaurantAndMenu = async () => {
-      if (!restaurantIdNumber) return;
+  const fetchRestaurantAndMenu = React.useCallback(async () => {
+    if (!restaurantIdNumber) return;
+    
+    try {
+      const token = await getToken();
+      if (!token) return;
+
+      // Don't set full page loading for updates, maybe just background refresh?
+      // For now, we'll keep it simple but maybe avoid flickering if data exists
+      if (!restaurant) setIsLoading(true);
       
-      try {
-        const token = await getToken();
-        if (!token) return;
-
-        setIsLoading(true);
-        
-        // Fetch restaurant details using partnerService
-        const restaurantResponse = await partnerService.getRestaurant(restaurantIdNumber, token);
-        if (restaurantResponse.success) {
-          setRestaurant(restaurantResponse.data);
-        } else {
-          throw new Error(restaurantResponse.error || 'Failed to fetch restaurant details');
-        }
-
-        // Fetch menu sections and items using menuService
-  const menuResponse = await menuService.getMenuSections(restaurantIdNumber, token);
-        if (menuResponse.success) {
-          setMenuSections(menuResponse.data || []);
-        } else {
-          console.warn('Failed to fetch menu sections:', menuResponse.error);
-        }
-      } catch (error) {
-        console.error('Error fetching restaurant menu:', error);
-        toast({
-          title: "Error",
-          description: "Failed to load restaurant menu. Please try again.",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
+      // Fetch restaurant details using partnerService
+      const restaurantResponse = await partnerService.getRestaurant(restaurantIdNumber, token);
+      if (restaurantResponse.success) {
+        setRestaurant(restaurantResponse.data);
+      } else {
+        throw new Error(restaurantResponse.error || 'Failed to fetch restaurant details');
       }
-    };
 
+      // Fetch menu sections and items using menuService
+      const menuResponse = await menuService.getMenuSections(restaurantIdNumber, token);
+      if (menuResponse.success) {
+        setMenuSections(menuResponse.data || []);
+      } else {
+        console.warn('Failed to fetch menu sections:', menuResponse.error);
+      }
+    } catch (error) {
+      console.error('Error fetching restaurant menu:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load restaurant menu. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [restaurantIdNumber, getToken, toast, restaurant]);
+
+  useEffect(() => {
     fetchRestaurantAndMenu();
-  }, [restaurantIdNumber, getToken, toast]);
+  }, [fetchRestaurantAndMenu]);
 
   const formatPrice = (priceCents: number) => {
     return `$${(priceCents / 100).toFixed(2)}`;
@@ -452,6 +454,7 @@ export const RestaurantMenu: React.FC = () => {
           enableCommentReports
           onReportComment={handleStartReport}
           reportedStatuses={ratingReportStatuses}
+          onRatingChange={fetchRestaurantAndMenu}
         />
       )}
 

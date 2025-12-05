@@ -10,9 +10,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { StarRating } from '@/components/ui/star-rating';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@clerk/clerk-react';
+import { useAuth as useClerkAuth } from '@clerk/clerk-react';
+import { useAuth } from '@/contexts/AuthContext';
 import { ratingService, Rating, RatingAggregate } from '@/services/ratingService';
-import { Loader2, MessageSquare, User, Clock, Star, Flag } from 'lucide-react';
+import { Loader2, MessageSquare, User, Clock, Star, Flag, Trash2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 interface RatingsViewProps {
@@ -24,6 +25,7 @@ interface RatingsViewProps {
   enableCommentReports?: boolean;
   onReportComment?: (rating: Rating) => void;
   reportedStatuses?: Record<number, { hasReported: boolean; jiraTicketId?: string | null }>;
+  onRatingChange?: () => void;
 }
 
 export const RatingsView: React.FC<RatingsViewProps> = ({
@@ -35,9 +37,11 @@ export const RatingsView: React.FC<RatingsViewProps> = ({
   enableCommentReports = false,
   onReportComment,
   reportedStatuses,
+  onRatingChange,
 }) => {
   const { toast } = useToast();
-  const { getToken } = useAuth();
+  const { getToken } = useClerkAuth();
+  const { user } = useAuth();
   const [ratings, setRatings] = useState<Rating[]>([]);
   const [aggregate, setAggregate] = useState<RatingAggregate | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -95,6 +99,40 @@ export const RatingsView: React.FC<RatingsViewProps> = ({
     }
   };
 
+  const handleDeleteRating = async (ratingId: number) => {
+    if (!confirm('Are you sure you want to delete this review?')) return;
+
+    try {
+      const token = await getToken();
+      const response = await ratingService.deleteRating(ratingId, token || undefined);
+      
+      if (response.success) {
+        toast({
+          title: "Review deleted",
+          description: "The review has been permanently deleted.",
+        });
+        // Reload ratings
+        loadRatings(1);
+        if (onRatingChange) {
+          onRatingChange();
+        }
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to delete review.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Error deleting review:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete review.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const getTargetTypeDisplay = () => {
     switch (targetType) {
       case 'restaurant':
@@ -115,6 +153,8 @@ export const RatingsView: React.FC<RatingsViewProps> = ({
       targetType === 'restaurant' &&
       Boolean(rating.comment) &&
       typeof onReportComment === 'function';
+    
+    const isAdmin = user?.isAdmin;
 
     return (
       <div className="border rounded-lg p-4 space-y-3">
@@ -133,9 +173,22 @@ export const RatingsView: React.FC<RatingsViewProps> = ({
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-            <Clock className="w-3 h-3" />
-            {formatDistanceToNow(new Date(rating.createdAt), { addSuffix: true })}
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Clock className="w-3 h-3" />
+              {formatDistanceToNow(new Date(rating.createdAt), { addSuffix: true })}
+            </div>
+            {isAdmin && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-destructive hover:text-destructive hover:bg-destructive/10"
+                onClick={() => handleDeleteRating(rating.id)}
+                title="Delete Review"
+              >
+                <Trash2 className="w-3 h-3" />
+              </Button>
+            )}
           </div>
         </div>
 

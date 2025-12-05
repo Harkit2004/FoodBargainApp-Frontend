@@ -130,32 +130,32 @@ export const DealDetail: React.FC = () => {
   }, [dealId, getToken, toast]);
 
   // Load ratings data
-  useEffect(() => {
-    const loadRatingsData = async () => {
-      if (!dealId) return;
+  const loadRatingsData = React.useCallback(async () => {
+    if (!dealId) return;
 
-      try {
-        const token = await getToken();
-        const dealIdNum = parseInt(dealId);
+    try {
+      const token = await getToken();
+      const dealIdNum = parseInt(dealId);
 
-        // Get rating statistics
-        const statsResponse = await ratingService.getRatingStats('deal', dealIdNum, token || undefined);
-        if (statsResponse.success && statsResponse.data) {
-          setRatingStats(statsResponse.data);
-        }
-
-        // Check if user has already rated
-        const userRatingCheck = await ratingService.hasUserRated('deal', dealIdNum, token || undefined);
-        if (userRatingCheck.hasRated && userRatingCheck.rating) {
-          setUserRating(userRatingCheck.rating);
-        }
-      } catch (error) {
-        console.error('Error loading ratings data:', error);
+      // Get rating statistics
+      const statsResponse = await ratingService.getRatingStats('deal', dealIdNum, token || undefined);
+      if (statsResponse.success && statsResponse.data) {
+        setRatingStats(statsResponse.data);
       }
-    };
 
-    loadRatingsData();
+      // Check if user has already rated
+      const userRatingCheck = await ratingService.hasUserRated('deal', dealIdNum, token || undefined);
+      if (userRatingCheck.hasRated && userRatingCheck.rating) {
+        setUserRating(userRatingCheck.rating);
+      }
+    } catch (error) {
+      console.error('Error loading ratings data:', error);
+    }
   }, [dealId, getToken]);
+
+  useEffect(() => {
+    loadRatingsData();
+  }, [loadRatingsData]);
 
   useEffect(() => {
     const checkReportStatus = async () => {
@@ -703,6 +703,7 @@ export const DealDetail: React.FC = () => {
           targetType="deal"
           targetId={deal.id}
           targetName={deal.title}
+          onRatingChange={loadRatingsData}
         />
 
         <Dialog
