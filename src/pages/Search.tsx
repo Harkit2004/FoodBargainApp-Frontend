@@ -514,7 +514,7 @@ export const Search: React.FC = () => {
             </h2>
             <FilterSheet
               filters={filters}
-              onFilterChange={(newFilters) => {
+              onFiltersChange={(newFilters) => {
                 setFilters(newFilters);
               }}
               onApply={(appliedFilters) => {
